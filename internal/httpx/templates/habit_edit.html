@@ -1,0 +1,50 @@
+{{define "body"}}
+<h1>{{if .Habit.ID}}Edit habit{{else}}New habit{{end}}</h1>
+<form method="post" action="{{if .Habit.ID}}/habits/{{.Habit.ID}}{{else}}/habits{{end}}" class="stack">
+  <label>Title <input type="text" name="title" value="{{.Habit.Title}}" required placeholder="Lunch"></label>
+
+  <label>Target calendar
+    <select name="target_calendar_id" required>
+      <option value="">Select…</option>
+      {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Habit.TargetCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
+    </select>
+  </label>
+
+  <label>Duration (minutes) <input type="number" min="5" max="240" name="duration_minutes" value="{{if .Habit.DurationMinutes}}{{.Habit.DurationMinutes}}{{else}}60{{end}}"></label>
+
+  <label>Ideal time (HH:MM) <input type="text" name="ideal_time" value="{{strOr .Habit.IdealTime "12:00"}}" placeholder="12:00" required></label>
+
+  <label>Flex (minutes) — how far the scheduler may drift from ideal <input type="number" min="0" max="240" name="flex_minutes" value="{{if .Habit.FlexMinutes}}{{.Habit.FlexMinutes}}{{else}}90{{end}}"></label>
+
+  <fieldset>
+    <legend>Days of week</legend>
+    {{range .Days}}
+      <label class="checkbox"><input type="checkbox" name="dow" value="{{.Key}}" {{if index $.DowSet .Key}}checked{{end}}> {{.Label}}</label>
+    {{end}}
+  </fieldset>
+
+  <label>Hours window (which account-level hours this habit lives inside)
+    <select name="hours_kind">
+      <option value="working"  {{if eq .Habit.HoursKind "working"}}selected{{end}}>Working</option>
+      <option value="personal" {{if or (eq .Habit.HoursKind "personal") (eq .Habit.HoursKind "")}}selected{{end}}>Personal</option>
+      <option value="meeting"  {{if eq .Habit.HoursKind "meeting"}}selected{{end}}>Meeting</option>
+    </select>
+  </label>
+
+  <label>Category
+    <select name="category_id">
+      <option value="">Auto-categorize</option>
+      {{range .Categories}}<option value="{{.ID}}" {{if and $.Habit.CategoryID (eq .ID (deref $.Habit.CategoryID))}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+
+  <label>Horizon (days) <input type="number" min="1" max="60" name="horizon_days" value="{{if .Habit.HorizonDays}}{{.Habit.HorizonDays}}{{else}}14{{end}}"></label>
+
+  <label class="checkbox"><input type="checkbox" name="enabled" {{if .Habit.Enabled}}checked{{end}}> Enabled</label>
+
+  <div class="row">
+    <button type="submit">Save</button>
+    <a href="/habits" class="button secondary">Cancel</a>
+  </div>
+</form>
+{{end}}

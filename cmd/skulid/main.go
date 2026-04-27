@@ -72,6 +72,8 @@ func run(log *slog.Logger) error {
 	audit := db.NewAuditRepo(pool)
 	categories := db.NewCategoryRepo(pool)
 	tasks := db.NewTaskRepo(pool)
+	habits := db.NewHabitRepo(pool)
+	occurrences := db.NewHabitOccurrenceRepo(pool)
 	aiConversations := db.NewAIConversationRepo(pool)
 	aiMessages := db.NewAIMessageRepo(pool)
 	aiPending := db.NewAIPendingActionRepo(pool)
@@ -91,7 +93,7 @@ func run(log *slog.Logger) error {
 
 	engine := syncengine.NewEngine(rules, accounts, calendars, links, audit, clientFor, log)
 	smartEngine := syncengine.NewSmartBlockEngine(blocks, managed, calendars, audit, clientFor, log)
-	scheduler := syncengine.NewScheduler(tasks, accounts, calendars, audit, clientFor, log)
+	scheduler := syncengine.NewScheduler(tasks, habits, occurrences, accounts, calendars, audit, clientFor, log)
 
 	mgr := worker.NewManager(pool, accounts, calendars, tokens, rules, blocks, links, audit,
 		clientFor, engine, smartEngine, cfg.ExternalURL, log)
@@ -141,6 +143,8 @@ func run(log *slog.Logger) error {
 		Audit:          audit,
 		Categories:     categories,
 		Tasks:          tasks,
+		Habits:         habits,
+		Occurrences:    occurrences,
 		Scheduler:      scheduler,
 		Engine:          engine,
 		ClientFor:       clientFor,

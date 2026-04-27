@@ -48,6 +48,12 @@ func NewRenderer() (*Renderer, error) {
 			}
 			return fmt.Sprintf("%d", *p)
 		},
+		"strOr": func(v, def string) string {
+			if strings.TrimSpace(v) == "" {
+				return def
+			}
+			return v
+		},
 		"dict": func(values ...any) (map[string]any, error) {
 			if len(values)%2 != 0 {
 				return nil, fmt.Errorf("dict needs an even number of args")

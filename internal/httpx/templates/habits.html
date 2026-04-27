@@ -1,0 +1,31 @@
+{{define "body"}}
+<div class="row">
+<h1>Habits</h1>
+<a href="/habits/new" class="button">+ New habit</a>
+</div>
+
+{{if .Habits}}
+<table>
+  <thead><tr><th>Title</th><th>When</th><th>Days</th><th>Duration</th><th>Hours</th><th>Calendar</th><th>Enabled</th><th></th></tr></thead>
+  <tbody>
+  {{range .Habits}}
+    <tr>
+      <td><a href="/habits/{{.Habit.ID}}">{{.Habit.Title}}</a></td>
+      <td>~{{.Habit.IdealTime}} ±{{.Habit.FlexMinutes}}m</td>
+      <td>{{join .Habit.DaysOfWeek ","}}</td>
+      <td>{{.Habit.DurationMinutes}}m</td>
+      <td>{{.Habit.HoursKind}}</td>
+      <td>{{.CalendarLabel}}</td>
+      <td>{{if .Habit.Enabled}}yes{{else}}no{{end}}</td>
+      <td class="actions">
+        <form method="post" action="/habits/{{.Habit.ID}}/place"><button type="submit">Recompute</button></form>
+        <form method="post" action="/habits/{{.Habit.ID}}/delete" onsubmit="return confirm('Delete habit?')"><button type="submit" class="danger">Delete</button></form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No habits yet. Use a habit to keep a recurring soft block on your calendar — Lunch, Decompress, Standup buffer, etc.</p>
+{{end}}
+{{end}}

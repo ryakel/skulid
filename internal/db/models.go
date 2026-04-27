@@ -143,6 +143,31 @@ type Task struct {
 	UpdatedAt          time.Time
 }
 
+type Habit struct {
+	ID               int64
+	Title            string
+	DurationMinutes  int
+	IdealTime        string   // "HH:MM"
+	FlexMinutes      int
+	DaysOfWeek       []string // {"mon","tue",...}
+	HoursKind        string   // "working" | "personal" | "meeting"
+	TargetCalendarID int64
+	CategoryID       *int64
+	HorizonDays      int
+	Enabled          bool
+	CreatedAt        time.Time
+}
+
+type HabitOccurrence struct {
+	ID            int64
+	HabitID       int64
+	TargetEventID string
+	OccursOn      time.Time
+	StartsAt      time.Time
+	EndsAt        time.Time
+	LastSyncedAt  time.Time
+}
+
 type AuditEntry struct {
 	ID            int64
 	TS            time.Time

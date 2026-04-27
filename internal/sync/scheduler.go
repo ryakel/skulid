@@ -13,26 +13,31 @@ import (
 	"github.com/ryakel/skulid/internal/hours"
 )
 
-// Scheduler places tasks (and, in a follow-up commit, habits) onto target
-// calendars by finding free slots in the target account's effective hours.
+// Scheduler places tasks and habits onto target calendars by finding free
+// slots in the target account's effective hours.
 type Scheduler struct {
-	tasks     *db.TaskRepo
-	accounts  *db.AccountRepo
-	calendars *db.CalendarRepo
-	audit     *db.AuditRepo
-	clientFor ClientFor
-	log       *slog.Logger
+	tasks       *db.TaskRepo
+	habits      *db.HabitRepo
+	occurrences *db.HabitOccurrenceRepo
+	accounts    *db.AccountRepo
+	calendars   *db.CalendarRepo
+	audit       *db.AuditRepo
+	clientFor   ClientFor
+	log         *slog.Logger
 }
 
-func NewScheduler(tasks *db.TaskRepo, accounts *db.AccountRepo, calendars *db.CalendarRepo,
+func NewScheduler(tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
+	accounts *db.AccountRepo, calendars *db.CalendarRepo,
 	audit *db.AuditRepo, clientFor ClientFor, log *slog.Logger) *Scheduler {
 	return &Scheduler{
-		tasks:     tasks,
-		accounts:  accounts,
-		calendars: calendars,
-		audit:     audit,
-		clientFor: clientFor,
-		log:       log,
+		tasks:       tasks,
+		habits:      habits,
+		occurrences: occurrences,
+		accounts:    accounts,
+		calendars:   calendars,
+		audit:       audit,
+		clientFor:   clientFor,
+		log:         log,
 	}
 }
 
@@ -204,4 +209,185 @@ func excludeBusyExact(in []hours.Window, start, end time.Time) []hours.Window {
 		out = append(out, w)
 	}
 	return out
+}
+
+// PlaceHabit walks the habit's horizon and ensures every matching weekday has
+// a scheduled occurrence near the ideal time. Existing occurrences are kept
+// when their slot is still free; otherwise they're moved (or deleted if no
+// fit exists). Days that don't match the habit's days_of_week are left alone.
+func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
+	h, err := s.habits.Get(ctx, habitID)
+	if err != nil || h == nil {
+		return fmt.Errorf("habit not found")
+	}
+	if !h.Enabled {
+		return nil
+	}
+
+	cal, err := s.calendars.Get(ctx, h.TargetCalendarID)
+	if err != nil {
+		return err
+	}
+	cli, err := s.clientFor(ctx, cal.AccountID)
+	if err != nil {
+		return err
+	}
+	acct, err := s.accounts.Get(ctx, cal.AccountID)
+	if err != nil {
+		return err
+	}
+
+	wh, err := hours.Parse(acct.EffectiveHours(db.HoursKind(h.HoursKind)))
+	if err != nil {
+		return fmt.Errorf("parse hours: %w", err)
+	}
+	loc, err := time.LoadLocation(wh.TimeZone)
+	if err != nil {
+		return fmt.Errorf("load tz: %w", err)
+	}
+
+	idealH, idealM, ok := splitHHMM(h.IdealTime)
+	if !ok {
+		return fmt.Errorf("invalid ideal_time %q", h.IdealTime)
+	}
+	dur := time.Duration(h.DurationMinutes) * time.Minute
+	flex := time.Duration(h.FlexMinutes) * time.Minute
+	dowSet := map[string]bool{}
+	for _, d := range h.DaysOfWeek {
+		dowSet[d] = true
+	}
+	if len(dowSet) == 0 {
+		return nil
+	}
+
+	now := time.Now().In(loc)
+	startDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	horizon := h.HorizonDays
+	if horizon <= 0 {
+		horizon = 14
+	}
+
+	// Index existing occurrences by date so we can quickly check if a day is
+	// already placed. Anything outside the horizon stays where it is.
+	existing, err := s.occurrences.ListByHabit(ctx, h.ID)
+	if err != nil {
+		return err
+	}
+	occByDate := map[string]db.HabitOccurrence{}
+	for _, o := range existing {
+		occByDate[o.OccursOn.Format("2006-01-02")] = o
+	}
+
+	for i := 0; i < horizon; i++ {
+		day := startDay.AddDate(0, 0, i)
+		if !dowSet[hours.DayKey(day.Weekday())] {
+			continue
+		}
+		key := day.Format("2006-01-02")
+		ideal := time.Date(day.Year(), day.Month(), day.Day(), idealH, idealM, 0, 0, loc)
+
+		// Build avail just for this day (so we don't pull a 14-day freebusy
+		// every time — Google supports it but it's wasteful).
+		dayStart := day
+		dayEnd := day.AddDate(0, 0, 1)
+		avail := hours.Expand(wh, dayStart, dayEnd, loc)
+		busy, err := s.busyOn(ctx, cli, cal.GoogleCalendarID, dayStart, dayEnd, wh.TimeZone)
+		if err != nil {
+			s.log.Warn("habit busy fetch failed", "habit_id", h.ID, "day", key, "err", err)
+			continue
+		}
+		// Don't let the occurrence's own existing block kick itself out.
+		if prev, ok := occByDate[key]; ok {
+			busy = excludeBusyExact(busy, prev.StartsAt, prev.EndsAt)
+		}
+
+		slot, ok := hours.NearestFitSlot(avail, busy, dur, flex, ideal)
+		if !ok {
+			// No fit today. If a stale occurrence exists, drop it.
+			if prev, ok := occByDate[key]; ok {
+				_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, prev.TargetEventID)
+				_ = s.occurrences.DeleteByID(ctx, prev.ID)
+				_ = s.audit.Write(ctx, db.AuditWrite{
+					Kind:          "habit",
+					TargetEventID: prev.TargetEventID,
+					Action:        "drop",
+					Message:       fmt.Sprintf("habit #%d no fit on %s", h.ID, key),
+				})
+			}
+			continue
+		}
+
+		// Skip if the occurrence is already in this exact slot.
+		if prev, ok := occByDate[key]; ok && prev.StartsAt.Equal(slot.Start) && prev.EndsAt.Equal(slot.End) {
+			continue
+		}
+
+		ev := &gcal.Event{
+			Summary:      h.Title,
+			Start:        &gcal.EventDateTime{DateTime: slot.Start.Format(time.RFC3339), TimeZone: wh.TimeZone},
+			End:          &gcal.EventDateTime{DateTime: slot.End.Format(time.RFC3339), TimeZone: wh.TimeZone},
+			Transparency: "opaque",
+			ExtendedProperties: &gcal.EventExtendedProperties{
+				Private: calendar.HabitProps(h.ID),
+			},
+		}
+
+		var saved *gcal.Event
+		action := "scheduled"
+		if prev, ok := occByDate[key]; ok && prev.TargetEventID != "" {
+			saved, err = cli.UpdateEvent(ctx, cal.GoogleCalendarID, prev.TargetEventID, ev)
+			action = "rescheduled"
+		} else {
+			saved, err = cli.InsertEvent(ctx, cal.GoogleCalendarID, ev)
+		}
+		if err != nil {
+			s.log.Warn("habit place failed", "habit_id", h.ID, "day", key, "err", err)
+			continue
+		}
+		if _, err := s.occurrences.Upsert(ctx, &db.HabitOccurrence{
+			HabitID:       h.ID,
+			TargetEventID: saved.Id,
+			OccursOn:      day,
+			StartsAt:      slot.Start,
+			EndsAt:        slot.End,
+		}); err != nil {
+			s.log.Error("habit occurrence upsert failed", "habit_id", h.ID, "day", key, "err", err)
+			continue
+		}
+		_ = s.audit.Write(ctx, db.AuditWrite{
+			Kind:          "habit",
+			TargetEventID: saved.Id,
+			Action:        action,
+			Message:       fmt.Sprintf("habit #%d %s %s", h.ID, key, slot.Start.Format("15:04")),
+		})
+	}
+	return nil
+}
+
+// PlaceAllHabits is the daily-tick equivalent for habits — useful at startup.
+func (s *Scheduler) PlaceAllHabits(ctx context.Context) {
+	hs, err := s.habits.ListEnabled(ctx)
+	if err != nil {
+		s.log.Error("scheduler list habits failed", "err", err)
+		return
+	}
+	for _, h := range hs {
+		if err := s.PlaceHabit(ctx, h.ID); err != nil {
+			s.log.Error("place habit failed", "habit_id", h.ID, "err", err)
+		}
+	}
+}
+
+// splitHHMM parses "HH:MM" and returns hour, minute, ok.
+func splitHHMM(s string) (int, int, bool) {
+	var h, m int
+	var trail rune
+	n, _ := fmt.Sscanf(s, "%d:%d%c", &h, &m, &trail)
+	if n != 2 {
+		return 0, 0, false
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, 0, false
+	}
+	return h, m, true
 }
