@@ -241,3 +241,95 @@ func TestParseNullStringIsTreatedAsEmpty(t *testing.T) {
 		t.Fatal("expected default tz for null input")
 	}
 }
+
+func TestFirstFitSlotReturnsEarliest(t *testing.T) {
+	loc := mustLoad(t, "UTC")
+	w := func(s, e string) Window {
+		return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+	}
+	avail := []Window{w("09:00", "12:00"), w("13:00", "17:00")}
+	busy := []Window{w("09:30", "10:00")}
+	got, ok := FirstFitSlot(avail, busy, 30*time.Minute, ts(t, "15:04", "09:00", loc))
+	if !ok {
+		t.Fatal("expected a slot")
+	}
+	if got.Start != ts(t, "15:04", "09:00", loc) || got.End != ts(t, "15:04", "09:30", loc) {
+		t.Fatalf("got %+v want 09:00-09:30", got)
+	}
+}
+
+func TestFirstFitSlotRespectsNotBefore(t *testing.T) {
+	loc := mustLoad(t, "UTC")
+	w := func(s, e string) Window {
+		return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+	}
+	avail := []Window{w("09:00", "17:00")}
+	got, ok := FirstFitSlot(avail, nil, 60*time.Minute, ts(t, "15:04", "10:30", loc))
+	if !ok {
+		t.Fatal("expected a slot")
+	}
+	if got.Start != ts(t, "15:04", "10:30", loc) {
+		t.Fatalf("got %+v want start 10:30", got)
+	}
+}
+
+func TestFirstFitSlotNoFit(t *testing.T) {
+	loc := mustLoad(t, "UTC")
+	w := func(s, e string) Window {
+		return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+	}
+	avail := []Window{w("09:00", "10:00")}
+	if _, ok := FirstFitSlot(avail, nil, 90*time.Minute, ts(t, "15:04", "09:00", loc)); ok {
+		t.Fatal("expected no fit for 90m in a 60m window")
+	}
+}
+
+func TestNearestFitSlotPrefersIdeal(t *testing.T) {
+	loc := mustLoad(t, "UTC")
+	w := func(s, e string) Window {
+		return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+	}
+	avail := []Window{w("09:00", "17:00")}
+	ideal := ts(t, "15:04", "12:00", loc)
+	got, ok := NearestFitSlot(avail, nil, 60*time.Minute, 90*time.Minute, ideal)
+	if !ok {
+		t.Fatal("expected a slot")
+	}
+	if got.Start != ideal {
+		t.Fatalf("got %+v want start at ideal 12:00", got)
+	}
+}
+
+func TestNearestFitSlotDriftsToNearestFreeSlot(t *testing.T) {
+	loc := mustLoad(t, "UTC")
+	w := func(s, e string) Window {
+		return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+	}
+	avail := []Window{w("09:00", "17:00")}
+	// Busy from 11:30 to 12:30 — ideal 12:00 is occluded; we should slide right to 12:30.
+	busy := []Window{w("11:30", "12:30")}
+	ideal := ts(t, "15:04", "12:00", loc)
+	got, ok := NearestFitSlot(avail, busy, 60*time.Minute, 90*time.Minute, ideal)
+	if !ok {
+		t.Fatal("expected a slot")
+	}
+	want := ts(t, "15:04", "12:30", loc)
+	if got.Start != want {
+		t.Fatalf("got %+v want start 12:30", got)
+	}
+}
+
+func TestNearestFitSlotRespectsFlex(t *testing.T) {
+	loc := mustLoad(t, "UTC")
+	w := func(s, e string) Window {
+		return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+	}
+	avail := []Window{w("09:00", "17:00")}
+	// Whole afternoon busy, leaving only morning options — but flex is 30min
+	// around ideal=14:00, so morning is out of reach: expect no fit.
+	busy := []Window{w("13:30", "17:00")}
+	ideal := ts(t, "15:04", "14:00", loc)
+	if _, ok := NearestFitSlot(avail, busy, 60*time.Minute, 30*time.Minute, ideal); ok {
+		t.Fatal("expected no fit within ±30m of 14:00")
+	}
+}

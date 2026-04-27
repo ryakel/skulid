@@ -67,3 +67,8 @@ pre code { display: block; padding: .5rem .75rem; overflow-x: auto; white-space:
 table.categories input[type=text] { width: 100%; font: inherit; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 6px; }
 table.categories input[type=color] { width: 2.5rem; height: 2rem; border: 1px solid var(--border); border-radius: 6px; padding: 0; cursor: pointer; }
 .cat-pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; color: #fff; background: var(--muted); white-space: nowrap; }
+.prio { display: inline-block; padding: .1rem .55rem; border-radius: 999px; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.prio-critical { background: #fde2e2; color: #6b1f1f; }
+.prio-high     { background: #fff1de; color: #6b3f1f; }
+.prio-medium   { background: #e2eafe; color: #1f3a6b; }
+.prio-low      { background: #eef0f5; color: var(--muted); }

@@ -1,0 +1,32 @@
+{{define "body"}}
+<div class="row">
+<h1>Tasks</h1>
+<a href="/tasks/new" class="button">+ New task</a>
+</div>
+
+{{if .Tasks}}
+<table>
+  <thead><tr><th>Title</th><th>Priority</th><th>Duration</th><th>Due</th><th>Status</th><th>Calendar</th><th>Scheduled</th><th></th></tr></thead>
+  <tbody>
+  {{range .Tasks}}
+    <tr>
+      <td><a href="/tasks/{{.Task.ID}}">{{.Task.Title}}</a></td>
+      <td><span class="prio prio-{{.Task.Priority}}">{{.Task.Priority}}</span></td>
+      <td>{{.Task.DurationMinutes}}m</td>
+      <td>{{fmtTimePtr .Task.DueAt}}</td>
+      <td>{{.Task.Status}}</td>
+      <td>{{.CalendarLabel}}</td>
+      <td>{{fmtTimePtr .Task.ScheduledStartsAt}}</td>
+      <td class="actions">
+        <form method="post" action="/tasks/{{.Task.ID}}/place"><button type="submit">Schedule</button></form>
+        <form method="post" action="/tasks/{{.Task.ID}}/complete"><button type="submit" class="secondary">Done</button></form>
+        <form method="post" action="/tasks/{{.Task.ID}}/delete" onsubmit="return confirm('Delete task?')"><button type="submit" class="danger">Delete</button></form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No tasks yet. Create one to drop it onto your calendar in the next available working-hours slot.</p>
+{{end}}
+{{end}}

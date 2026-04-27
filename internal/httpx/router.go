@@ -36,6 +36,8 @@ type Server struct {
 	Links          *db.EventLinkRepo
 	Audit          *db.AuditRepo
 	Categories     *db.CategoryRepo
+	Tasks          *db.TaskRepo
+	Scheduler      *syncengine.Scheduler
 	Engine         *syncengine.Engine
 	ClientFor      syncengine.ClientFor
 	Worker         *worker.Manager
@@ -95,6 +97,15 @@ func (s *Server) Router() http.Handler {
 		r.Post("/blocks/{id}", s.handleBlockSave)
 		r.Post("/blocks/{id}/delete", s.handleBlockDelete)
 		r.Post("/blocks/{id}/recompute", s.handleBlockRecompute)
+
+		r.Get("/tasks", s.handleTasksPage)
+		r.Get("/tasks/new", s.handleTaskEditPage)
+		r.Get("/tasks/{id}", s.handleTaskEditPage)
+		r.Post("/tasks", s.handleTaskSave)
+		r.Post("/tasks/{id}", s.handleTaskSave)
+		r.Post("/tasks/{id}/delete", s.handleTaskDelete)
+		r.Post("/tasks/{id}/place", s.handleTaskPlace)
+		r.Post("/tasks/{id}/complete", s.handleTaskComplete)
 
 		r.Get("/audit", s.handleAuditPage)
 

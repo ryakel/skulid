@@ -204,3 +204,69 @@ func MergeWithGap(in []Window, gap time.Duration) []Window {
 func Overlap(a, b Window) bool {
 	return a.Start.Before(b.End) && b.Start.Before(a.End)
 }
+
+// FirstFitSlot returns the earliest contiguous slot of `duration` lying inside
+// (avail - busy) and starting at or after `notBefore`. Used to place tasks
+// onto the next available working-hours window.
+func FirstFitSlot(avail, busy []Window, duration time.Duration, notBefore time.Time) (Window, bool) {
+	free := SubtractBusy(avail, busy)
+	for _, f := range free {
+		start := f.Start
+		if notBefore.After(start) {
+			start = notBefore
+		}
+		end := start.Add(duration)
+		if !end.After(f.End) {
+			return Window{Start: start, End: end}, true
+		}
+	}
+	return Window{}, false
+}
+
+// NearestFitSlot returns the slot of `duration` whose start time is closest
+// to `ideal`, considered only within ±flex of ideal and only within
+// (avail - busy). Ties go to the earlier slot. Used to place habits at
+// their preferred time, drifting only as far as flex allows.
+func NearestFitSlot(avail, busy []Window, duration, flex time.Duration, ideal time.Time) (Window, bool) {
+	earliest := ideal.Add(-flex)
+	latest := ideal.Add(flex)
+	free := SubtractBusy(avail, busy)
+
+	var best Window
+	bestFound := false
+	var bestDist time.Duration
+	for _, f := range free {
+		// In each free window, the latest start that still fits is f.End - duration.
+		// We're allowed to start anywhere in [max(f.Start, earliest), min(f.End-duration, latest)].
+		lo := f.Start
+		if earliest.After(lo) {
+			lo = earliest
+		}
+		hi := f.End.Add(-duration)
+		if latest.Before(hi) {
+			hi = latest
+		}
+		if hi.Before(lo) {
+			continue
+		}
+		// Clamp ideal into [lo, hi] — that's the closest legal start to ideal
+		// inside this free window.
+		start := ideal
+		if start.Before(lo) {
+			start = lo
+		}
+		if start.After(hi) {
+			start = hi
+		}
+		dist := start.Sub(ideal)
+		if dist < 0 {
+			dist = -dist
+		}
+		if !bestFound || dist < bestDist {
+			best = Window{Start: start, End: start.Add(duration)}
+			bestFound = true
+			bestDist = dist
+		}
+	}
+	return best, bestFound
+}

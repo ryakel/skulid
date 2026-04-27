@@ -20,6 +20,8 @@ const (
 	PropSourceEventID = "skulidSourceEventId"
 	PropRuleID        = "skulidRuleId"
 	PropSmartBlockID  = "skulidSmartBlockId"
+	PropTaskID        = "skulidTaskId"
+	PropHabitID       = "skulidHabitId"
 
 	// Legacy keys from the pre-rename "calm-axolotl" era. Read-only — recognized
 	// by IsManaged() so any old managed event written under the previous name
@@ -193,6 +195,20 @@ func SmartBlockProps(blockID int64) map[string]string {
 	return map[string]string{
 		PropManaged:      "1",
 		PropSmartBlockID: fmt.Sprintf("%d", blockID),
+	}
+}
+
+func TaskProps(taskID int64) map[string]string {
+	return map[string]string{
+		PropManaged: "1",
+		PropTaskID:  fmt.Sprintf("%d", taskID),
+	}
+}
+
+func HabitProps(habitID int64) map[string]string {
+	return map[string]string{
+		PropManaged: "1",
+		PropHabitID: fmt.Sprintf("%d", habitID),
 	}
 }
 

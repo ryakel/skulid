@@ -1,0 +1,49 @@
+{{define "body"}}
+<h1>{{if .Task.ID}}Edit task{{else}}New task{{end}}</h1>
+<form method="post" action="{{if .Task.ID}}/tasks/{{.Task.ID}}{{else}}/tasks{{end}}" class="stack">
+  <label>Title <input type="text" name="title" value="{{.Task.Title}}" required></label>
+
+  <label>Notes <textarea name="notes" rows="3">{{.Task.Notes}}</textarea></label>
+
+  <label>Target calendar
+    <select name="target_calendar_id" required>
+      <option value="">Select…</option>
+      {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Task.TargetCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
+    </select>
+  </label>
+
+  <label>Priority
+    <select name="priority">
+      <option value="critical" {{if eq .Task.Priority "critical"}}selected{{end}}>Critical</option>
+      <option value="high" {{if eq .Task.Priority "high"}}selected{{end}}>High</option>
+      <option value="medium" {{if or (eq .Task.Priority "medium") (eq .Task.Priority "")}}selected{{end}}>Medium</option>
+      <option value="low" {{if eq .Task.Priority "low"}}selected{{end}}>Low</option>
+    </select>
+  </label>
+
+  <label>Duration (minutes) <input type="number" min="5" max="480" name="duration_minutes" value="{{if .Task.DurationMinutes}}{{.Task.DurationMinutes}}{{else}}30{{end}}"></label>
+
+  <label>Due (local datetime, optional) <input type="datetime-local" name="due_at" value="{{.DueAtLocal}}"></label>
+
+  <label>Category
+    <select name="category_id">
+      <option value="">Auto-categorize</option>
+      {{range .Categories}}<option value="{{.ID}}" {{if and $.Task.CategoryID (eq .ID (deref $.Task.CategoryID))}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+
+  <label>Status
+    <select name="status">
+      <option value="pending" {{if or (eq .Task.Status "pending") (eq .Task.Status "")}}selected{{end}}>Pending</option>
+      <option value="scheduled" {{if eq .Task.Status "scheduled"}}selected{{end}}>Scheduled</option>
+      <option value="completed" {{if eq .Task.Status "completed"}}selected{{end}}>Completed</option>
+      <option value="cancelled" {{if eq .Task.Status "cancelled"}}selected{{end}}>Cancelled</option>
+    </select>
+  </label>
+
+  <div class="row">
+    <button type="submit">Save</button>
+    <a href="/tasks" class="button secondary">Cancel</a>
+  </div>
+</form>
+{{end}}

@@ -110,6 +110,39 @@ type ManagedBlock struct {
 	LastSyncedAt     time.Time
 }
 
+// Task priorities (matches Reclaim's Kanban columns).
+const (
+	PriorityCritical = "critical"
+	PriorityHigh     = "high"
+	PriorityMedium   = "medium"
+	PriorityLow      = "low"
+)
+
+// Task statuses.
+const (
+	TaskPending   = "pending"
+	TaskScheduled = "scheduled"
+	TaskCompleted = "completed"
+	TaskCancelled = "cancelled"
+)
+
+type Task struct {
+	ID                 int64
+	Title              string
+	Notes              string
+	Priority           string
+	DurationMinutes    int
+	DueAt              *time.Time
+	Status             string
+	TargetCalendarID   int64
+	CategoryID         *int64
+	ScheduledEventID   string
+	ScheduledStartsAt  *time.Time
+	ScheduledEndsAt    *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
 type AuditEntry struct {
 	ID            int64
 	TS            time.Time
