@@ -354,6 +354,37 @@ table.categories input[type=color] {
 .planner-event .ev-meta  { color: var(--muted); font-size: .65rem; margin-top: .05rem; }
 
 /* ------------------------------------------------------------------------- *
+ * Priorities Kanban
+ * ------------------------------------------------------------------------- */
+
+.kanban {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem; margin-top: 1rem;
+}
+.kanban-col {
+  background: var(--card); border: 1px solid var(--border);
+  border-top: 3px solid var(--c, var(--primary));
+  border-radius: var(--radius); box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column; min-height: 240px;
+}
+.kanban-col header {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .65rem .85rem; border-bottom: 1px solid var(--border);
+  font-size: .9rem;
+}
+.kanban-col header .dot { width: .55rem; height: .55rem; }
+.kanban-body { padding: .55rem; display: flex; flex-direction: column; gap: .45rem; }
+.kanban-card {
+  display: block; padding: .55rem .7rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--card); text-decoration: none; color: var(--fg);
+  transition: border-color .12s, box-shadow .12s;
+}
+.kanban-card:hover { border-color: var(--border-2); box-shadow: var(--shadow-1); }
+.kanban-card-title { font-weight: 600; font-size: .9rem; }
+.kanban-card-meta  { color: var(--muted); font-size: .75rem; margin-top: .15rem; }
+
+/* ------------------------------------------------------------------------- *
  * Login page (centered, no sidebar)
  * ------------------------------------------------------------------------- */
 

@@ -1,0 +1,36 @@
+{{define "body"}}
+<div class="row">
+  <h1 style="margin:0">Priorities</h1>
+  <a href="/tasks/new" class="button">+ New task</a>
+</div>
+<p class="muted">Tasks bucketed by priority. Click a card to edit. Done/cancelled are hidden — see the <a href="/tasks">full list</a> for those.</p>
+
+<div class="kanban">
+{{range .Columns}}
+  <section class="kanban-col" style="--c:{{.Color}}">
+    <header>
+      <span class="dot" style="background:{{.Color}}"></span>
+      <strong>{{.Name}}</strong>
+      <span class="muted">{{.Count}}</span>
+    </header>
+    <div class="kanban-body">
+      {{if .Cards}}
+        {{range .Cards}}
+          <a class="kanban-card" href="/tasks/{{.ID}}">
+            <div class="kanban-card-title">{{.Title}}</div>
+            <div class="kanban-card-meta">
+              <span>{{.DurationMinutes}}m</span>
+              {{if .DueLabel}}<span>· due {{.DueLabel}}</span>{{end}}
+              {{if .ScheduledLabel}}<span>· {{.ScheduledLabel}}</span>{{end}}
+              {{if .Status}}<span class="muted">· {{.Status}}</span>{{end}}
+            </div>
+          </a>
+        {{end}}
+      {{else}}
+        <p class="muted">No tasks here.</p>
+      {{end}}
+    </div>
+  </section>
+{{end}}
+</div>
+{{end}}

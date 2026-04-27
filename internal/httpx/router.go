@@ -78,6 +78,7 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/", s.handleDashboard)
 		r.Get("/planner", s.handlePlannerPage)
+		r.Get("/priorities", s.handlePrioritiesPage)
 
 		r.Get("/accounts", s.handleAccountsPage)
 		r.Post("/accounts/connect", s.handleAccountConnect)
