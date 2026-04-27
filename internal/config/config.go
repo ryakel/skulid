@@ -16,6 +16,8 @@ type Config struct {
 	EncryptionKey      []byte
 	DatabaseURL        string
 	ListenAddr         string
+	AnthropicAPIKey    string
+	AnthropicModel     string
 }
 
 func Load() (*Config, error) {
@@ -25,6 +27,8 @@ func Load() (*Config, error) {
 		ExternalURL:        strings.TrimRight(os.Getenv("EXTERNAL_URL"), "/"),
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		ListenAddr:         envOr("LISTEN_ADDR", ":8080"),
+		AnthropicAPIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicModel:     envOr("ANTHROPIC_MODEL", "claude-opus-4-7"),
 	}
 
 	sessionSecret := os.Getenv("SESSION_SECRET")

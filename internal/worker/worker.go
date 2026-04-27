@@ -25,6 +25,7 @@ const (
 	channelRenewWhen = 24 * time.Hour
 	channelRenewTick = time.Hour
 	staleAfter       = 10 * time.Minute
+	aiCleanupTick    = 6 * time.Hour
 )
 
 // Manager coordinates per-account work and the cross-cutting scheduler. Jobs
@@ -44,6 +45,10 @@ type Manager struct {
 
 	externalURL string
 	log         *slog.Logger
+
+	// AI conversation cleanup. Both nil if the assistant feature is unused.
+	aiConversations *db.AIConversationRepo
+	aiMaxAge        time.Duration
 
 	mu      stdsync.Mutex
 	workers map[int64]*accountWorker
@@ -182,12 +187,21 @@ func (m *Manager) RecomputeAllSmartBlocks(ctx context.Context) {
 	}
 }
 
+// SetAIConversationCleanup wires in the AI conversations repo so the scheduler
+// can prune stale chats. Optional: if not called, no AI cleanup runs.
+func (m *Manager) SetAIConversationCleanup(repo *db.AIConversationRepo, maxAge time.Duration) {
+	m.aiConversations = repo
+	m.aiMaxAge = maxAge
+}
+
 // scheduler runs the polling fallback and watch-channel renewal loops.
 func (m *Manager) scheduler(ctx context.Context) {
 	pollTicker := time.NewTicker(pollInterval)
 	renewTicker := time.NewTicker(channelRenewTick)
+	cleanupTicker := time.NewTicker(aiCleanupTick)
 	defer pollTicker.Stop()
 	defer renewTicker.Stop()
+	defer cleanupTicker.Stop()
 
 	// Run an initial pass shortly after startup so we don't wait 5 min for the first sync.
 	startup := time.NewTimer(15 * time.Second)
@@ -202,11 +216,28 @@ func (m *Manager) scheduler(ctx context.Context) {
 		case <-startup.C:
 			m.runPollPass(ctx)
 			m.runRenewPass(ctx)
+			m.runAICleanup(ctx)
 		case <-pollTicker.C:
 			m.runPollPass(ctx)
 		case <-renewTicker.C:
 			m.runRenewPass(ctx)
+		case <-cleanupTicker.C:
+			m.runAICleanup(ctx)
 		}
+	}
+}
+
+func (m *Manager) runAICleanup(ctx context.Context) {
+	if m.aiConversations == nil || m.aiMaxAge <= 0 {
+		return
+	}
+	n, err := m.aiConversations.DeleteOlderThan(ctx, m.aiMaxAge)
+	if err != nil {
+		m.log.Error("ai cleanup failed", "err", err)
+		return
+	}
+	if n > 0 {
+		m.log.Info("ai cleanup", "deleted_conversations", n)
 	}
 }
 

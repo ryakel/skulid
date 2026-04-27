@@ -21,6 +21,9 @@ import (
 func (s *Server) pageData(r *http.Request, title string) map[string]any {
 	d := map[string]any{
 		"Title": title,
+		"Features": map[string]bool{
+			"Assistant": s.Agent != nil,
+		},
 	}
 	if sess, ok := auth.SessionFromContext(r.Context()); ok {
 		d["Session"] = sess

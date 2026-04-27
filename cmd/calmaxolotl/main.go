@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ryakel/skulid/internal/ai"
 	"github.com/ryakel/skulid/internal/auth"
 	"github.com/ryakel/skulid/internal/calendar"
 	"github.com/ryakel/skulid/internal/config"
@@ -69,6 +70,9 @@ func run(log *slog.Logger) error {
 	managed := db.NewManagedBlockRepo(pool)
 	links := db.NewEventLinkRepo(pool)
 	audit := db.NewAuditRepo(pool)
+	aiConversations := db.NewAIConversationRepo(pool)
+	aiMessages := db.NewAIMessageRepo(pool)
+	aiPending := db.NewAIPendingActionRepo(pool)
 
 	// Record the configured external URL so it's visible in /settings.
 	_ = settings.Set(context.Background(), db.SettingExternalURL, cfg.ExternalURL)
@@ -88,6 +92,19 @@ func run(log *slog.Logger) error {
 
 	mgr := worker.NewManager(pool, accounts, calendars, tokens, rules, blocks, links, audit,
 		clientFor, engine, smartEngine, cfg.ExternalURL, log)
+	mgr.SetAIConversationCleanup(aiConversations, 30*24*time.Hour)
+
+	var agent *ai.Agent
+	if cfg.AnthropicAPIKey != "" {
+		agent = ai.NewAgent(
+			ai.NewClient(cfg.AnthropicAPIKey, cfg.AnthropicModel),
+			aiConversations, aiMessages, aiPending,
+			accounts, calendars, audit, clientFor, log,
+		)
+		log.Info("ai assistant enabled", "model", cfg.AnthropicModel)
+	} else {
+		log.Info("ai assistant disabled (set ANTHROPIC_API_KEY to enable)")
+	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -119,12 +136,16 @@ func run(log *slog.Logger) error {
 		Managed:        managed,
 		Links:          links,
 		Audit:          audit,
-		Engine:         engine,
-		ClientFor:      clientFor,
-		Worker:         mgr,
-		Renderer:       renderer,
-		WebhookHandler: hookHandler,
-		Log:            log,
+		Engine:          engine,
+		ClientFor:       clientFor,
+		Worker:          mgr,
+		Renderer:        renderer,
+		WebhookHandler:  hookHandler,
+		AIConversations: aiConversations,
+		AIMessages:      aiMessages,
+		AIPending:       aiPending,
+		Agent:           agent,
+		Log:             log,
 	}
 
 	httpSrv := &http.Server{

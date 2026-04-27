@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/ryakel/skulid/internal/ai"
 	"github.com/ryakel/skulid/internal/auth"
 	"github.com/ryakel/skulid/internal/config"
 	"github.com/ryakel/skulid/internal/crypto"
@@ -39,7 +40,12 @@ type Server struct {
 	Worker         *worker.Manager
 	Renderer       *Renderer
 	WebhookHandler *webhook.Handler
-	Log            *slog.Logger
+	// AI assistant — nil-safe; routes are only registered when Agent != nil.
+	AIConversations *db.AIConversationRepo
+	AIMessages      *db.AIMessageRepo
+	AIPending       *db.AIPendingActionRepo
+	Agent           *ai.Agent
+	Log             *slog.Logger
 }
 
 func (s *Server) Router() http.Handler {
@@ -93,6 +99,16 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/settings", s.handleSettingsPage)
 		r.Post("/settings/rewatch", s.handleRewatchAll)
+
+		if s.Agent != nil {
+			r.Get("/assistant", s.handleAssistantList)
+			r.Post("/assistant", s.handleAssistantNew)
+			r.Get("/assistant/{id}", s.handleAssistantChat)
+			r.Post("/assistant/{id}/message", s.handleAssistantSend)
+			r.Post("/assistant/{id}/actions/{aid}/apply", s.handleAssistantApply)
+			r.Post("/assistant/{id}/actions/{aid}/reject", s.handleAssistantReject)
+			r.Post("/assistant/{id}/delete", s.handleAssistantDelete)
+		}
 	})
 
 	r.Get("/static/*", http.StripPrefix("/static/", staticHandler()).ServeHTTP)
