@@ -12,15 +12,49 @@ calendar, optionally with filtering and transformation applied.
 | Target calendar      | Where mirrored events are written                             |
 | Direction            | `one_way` or `bidirectional`                                  |
 | Primary side         | Tie-breaker for bidirectional conflicts (`source` or `target`) |
-| Filter               | JSON predicate — only matching events are mirrored            |
-| Transform            | JSON spec for what the mirror looks like                      |
+| Category             | Optional pin (color/group on planner)                         |
+| Visibility mode      | One of four Reclaim-style presets — see below                 |
+| All-day mode         | `sync_all` / `only_busy` / `skip`                             |
+| Working-hours only   | Mirror only events whose start lies in the source account's Working hours |
+| Filter               | Title regex / color / attendee / free-busy / hour bounds      |
 | Backfill days        | Walk N days of history at save time (0 = forward-only)        |
 | Enabled              | Disabled rules are inert until you re-enable them             |
+
+## Visibility modes
+
+The visibility preset drives the engine's transform. Picking a preset
+replaces the old per-field Transform JSON form.
+
+| Preset                              | Mirror title         | Attendees   | Description | Visibility |
+| ----------------------------------- | -------------------- | ----------- | ----------- | ---------- |
+| Personal Commitment for all         | "Personal Commitment"| stripped    | stripped    | private    |
+| Busy for all (default)              | "Busy"               | stripped    | stripped    | private    |
+| Details for you, busy for others    | preserved            | stripped    | preserved   | private    |
+| Details for you and those with access | preserved          | preserved   | preserved   | default    |
+
+`extendedProperties.private.skulidManaged="1"` is always set, so the
+loop guard works regardless of preset.
+
+## All-day handling
+
+A separate radio independent of the visibility preset:
+
+- `sync_all` — every all-day event mirrors (default).
+- `only_busy` — skip all-day events marked transparent (holidays).
+- `skip` — never mirror all-day events.
+
+## Working-hours only
+
+When checked, the engine looks up the **source account's** Working
+hours and drops any event whose start time falls outside them. Useful
+for "only sync work meetings, not after-hours invites".
 
 ## Filters
 
 Filters are AND'd together — every condition must match. An empty
-filter matches every non-cancelled event.
+filter matches every non-cancelled event. The all-day mode is a
+separate radio (see above) and replaces what used to be a filter
+field.
 
 | Filter           | Effect                                                      |
 | ---------------- | ----------------------------------------------------------- |
@@ -28,7 +62,6 @@ filter matches every non-cancelled event.
 | Color IDs        | Comma-separated; matches `event.ColorId`                    |
 | Attendee any     | Mirror only if any attendee email matches one of these      |
 | Free/busy        | `busy` = opaque only; `free` = transparent only             |
-| All-day          | `only` = all-day only; `exclude` = timed only               |
 | Start hour ≥     | Local-time hour bound (rejects all-day events)              |
 | Start hour <     | Upper local-time bound                                      |
 
@@ -36,19 +69,12 @@ Cancelled events are always rejected by the filter — but they still
 trigger **deletion** of any existing mirror. So if you cancel an event
 on the source, the mirror disappears too.
 
-## Transforms
+## Transforms (legacy)
 
-Transforms shape the mirror event before it's written.
-
-| Field                 | Effect                                                                      |
-| --------------------- | --------------------------------------------------------------------------- |
-| Title template        | `{title}` and `{location}` are substituted; defaults to source summary      |
-| Force "busy"          | Sets the mirror's transparency to `opaque` regardless of source             |
-| Strip attendees       | Mirror has no attendees                                                     |
-| Strip description     | Mirror has empty description                                                |
-| Visibility            | `default`/`public`/`private` to override the source                         |
-
-Time fields, recurrence, and the original location are always preserved.
+Earlier versions exposed individual transform knobs (title template,
+strip attendees, etc.). Those are now derived from the **Visibility
+mode** preset above. Time fields, recurrence, and the original
+location are always preserved on the mirror.
 
 ## Direction
 

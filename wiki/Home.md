@@ -1,17 +1,22 @@
 # skulid
 
-Self-hosted, single-user Google Calendar sync — a Reclaim.ai alternative
-you can run on a homelab box. One Go binary plus Postgres in Docker.
+Self-hosted, single-user Google Calendar sync — a Reclaim.ai
+alternative you can run on a homelab box. One Go binary plus
+Postgres in Docker.
 
 ## What it does
 
 - **Sync rules** mirror events between calendars (one-way or
-  bidirectional) with optional filtering and transformation.
-- **Smart blocks** automatically maintain "focus"/"busy" blocks on a
-  target calendar based on busy time elsewhere, respecting per-block
-  working hours in any IANA timezone.
-- **AI assistant** (optional) lets you make calendar changes by chatting
-  with Claude, with confirmation required before any write hits Google.
+  bidirectional) with optional filtering, transformation, and
+  Reclaim-style visibility presets.
+- **Smart blocks** auto-generate availability/focus blocks on a
+  target calendar based on busy time elsewhere.
+- **Tasks** are auto-placed into the next free Working-hours slot.
+- **Habits** are recurring soft blocks that drift near an ideal time.
+- **Categories** drive color-coding, planner totals, and per-rule pins.
+- **Planner** + **Priorities** views to see the week at a glance.
+- **AI assistant** (optional) lets you talk to Claude to manage your
+  calendars; every write requires confirmation.
 
 ## Where to start
 
@@ -19,17 +24,24 @@ you can run on a homelab box. One Go binary plus Postgres in Docker.
 | ---------------------------------------- | ----------------------------------- |
 | Stand up a fresh instance                | [Getting Started](Getting-Started)  |
 | Understand how the moving parts fit      | [Architecture](Architecture)        |
-| Set up a sync rule                       | [Sync Rules](Sync-Rules)            |
-| Set up an availability/focus block      | [Smart Blocks](Smart-Blocks)        |
-| Configure the daemon                     | [Configuration](Configuration)      |
+| See your week                             | [Planner](Planner)                  |
+| Add a one-shot block (e.g. "draft Q3")   | [Tasks](Tasks)                      |
+| Add a recurring soft block (e.g. Lunch)  | [Habits](Habits)                    |
+| Triage by priority                        | [Priorities](Priorities)            |
+| Mirror events between calendars          | [Sync Rules](Sync-Rules)            |
+| Maintain availability / focus blocks     | [Smart Blocks](Smart-Blocks)        |
+| Tune working hours                        | [Hours](Hours)                      |
+| Add padding around scheduled blocks       | [Buffers](Buffers)                  |
+| Customize event color-coding              | [Categories](Categories)            |
+| Use the Claude-powered chat               | [AI Assistant](AI-Assistant)        |
+| Configure environment variables          | [Configuration](Configuration)      |
 | Back up, renew watches, or troubleshoot  | [Operations](Operations)            |
 | Understand the threat model              | [Security Model](Security-Model)    |
 | Hack on the codebase                     | [Development](Development)          |
-| Use the Claude-powered chat              | [AI Assistant](AI-Assistant)        |
 
 ## Status
 
-Beta. The schema is at v1; breaking schema changes will get a migration.
+Beta. Schema is at v7; breaking changes will get numbered migrations.
 Token sealing keys are not rotated automatically — keep your
 `ENCRYPTION_KEY` somewhere safe.
 

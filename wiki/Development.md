@@ -51,18 +51,20 @@ Google are deferred — see [#integration-tests-are-deferred](#integration-tests
 ## Project layout
 
 ```
-cmd/skulid/      # main.go entrypoint
+cmd/skulid/           # main.go entrypoint
 internal/
   ai/                 # Anthropic-powered assistant (optional feature)
   auth/               # OAuth, sessions, TOFU, middleware
-  calendar/           # Google Calendar v3 wrapper
+  calendar/           # Google Calendar v3 wrapper + ext-properties helpers
+  category/           # pure event categorizer (no I/O)
   config/             # env-var loading
   crypto/             # AES-256-GCM token sealing
   db/                 # pgx repos + scanned models
+  hours/              # pure window/working-hours helpers + slot finders
   httpx/              # chi router, templates, handlers
-  sync/               # rule engine + smart-block engine (pure logic)
+  sync/               # rule engine, smart-block engine, task/habit scheduler
   webhook/            # Google push handler
-  worker/             # per-account workers + scheduler
+  worker/             # per-account workers + scheduler tick + AI cleanup
 migrations/           # *.sql, embedded into the binary
 wiki/                 # this documentation, synced to GitHub Wiki
 ```

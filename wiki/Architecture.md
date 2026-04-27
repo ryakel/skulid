@@ -58,20 +58,24 @@ through it.
 
 ## Data model
 
-| Table             | Purpose                                                        |
-| ----------------- | -------------------------------------------------------------- |
-| `setting`         | Owner identity (TOFU), external URL, schema version            |
-| `account`         | One Google account; sealed refresh+access tokens               |
-| `calendar`        | Each visible calendar belonging to an account                  |
-| `sync_token`      | Per-calendar Google sync token + push channel state            |
-| `sync_rule`       | A rule mirroring source → target with filter+transform JSON    |
-| `event_link`      | Links a source event to its mirror; loop-guard primary key     |
-| `smart_block`     | A focus-block recipe (target, sources, working hours, horizon) |
-| `managed_block`   | Each focus block we've actually written to Google              |
-| `audit_log`       | What skulid did and why                                  |
-| `ai_conversation` | One AI assistant chat (30-day TTL)                             |
-| `ai_message`      | One turn within a conversation                                 |
-| `ai_pending_action` | Tool call awaiting human confirmation                        |
+| Table                | Purpose                                                                |
+| -------------------- | ---------------------------------------------------------------------- |
+| `setting`            | Owner identity (TOFU), external URL, buffers, schema version           |
+| `account`            | One Google account; sealed tokens; per-account Working/Personal/Meeting hours |
+| `calendar`           | Each visible calendar belonging to an account; optional default category |
+| `sync_token`         | Per-calendar Google sync token + push channel state                    |
+| `sync_rule`          | A rule mirroring source → target. Visibility preset + all-day mode + working-hours-only + optional category pin |
+| `event_link`         | Links a source event to its mirror; loop-guard primary key             |
+| `smart_block`        | A focus-block recipe (target, sources, working hours, horizon)         |
+| `managed_block`      | Each focus block we've actually written to Google                      |
+| `category`           | Eight built-in categories (slug, name, color); user-editable name+color |
+| `task`               | One-shot scheduled work; priority + duration + due + scheduled placement |
+| `habit`              | Recurring soft block (e.g. Lunch); ideal_time + flex + days_of_week    |
+| `habit_occurrence`   | Per-day instance of a habit (event id + window)                        |
+| `audit_log`          | What skulid did and why                                                |
+| `ai_conversation`    | One AI assistant chat (30-day TTL)                                     |
+| `ai_message`         | One turn within a conversation                                         |
+| `ai_pending_action`  | Tool call awaiting human confirmation                                  |
 
 ## Change flow
 
@@ -128,20 +132,22 @@ sync, the engine skips the update.
 ## Where things live
 
 ```
-cmd/skulid/main.go        # entrypoint, wires everything together
+cmd/skulid/main.go             # entrypoint, wires every dependency
 internal/
   config/                      # env-var loading
   crypto/                      # AES-256-GCM token sealing
-  db/                          # pgx repos + the goose migrations
+  db/                          # pgx repos + scanned struct models
   auth/                        # OAuth, sessions, TOFU, middleware
-  calendar/                    # Google Calendar client wrapper
-  sync/                        # rule + smart-block engines (pure logic)
-  worker/                      # per-account workers + scheduler
+  calendar/                    # Google Calendar client + extendedProperties helpers
+  category/                    # pure event-classification heuristics
+  hours/                       # pure WorkingHours + window arithmetic + slot finders
+  sync/                        # rule engine + smart-block engine + scheduler (tasks/habits)
+  worker/                      # per-account workers + scheduler tick + AI cleanup
   webhook/                     # Google push notification handler
-  httpx/                       # HTTP server, templates, handlers
+  httpx/                       # chi router, html/template, handlers
   ai/                          # Anthropic-powered assistant (optional)
 migrations/                    # *.sql, embedded into the binary
-wiki/                          # this documentation
+wiki/                          # this documentation, synced to GitHub Wiki
 ```
 
 See [Development](Development) for hacking on the codebase.

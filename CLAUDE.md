@@ -17,18 +17,20 @@ configuration knob, and operations.
 ## Repo map
 
 ```
-cmd/skulid/main.go        # entrypoint; wires every dependency
+cmd/skulid/main.go             # entrypoint; wires every dependency
 internal/
   ai/                          # Anthropic assistant (only enabled when ANTHROPIC_API_KEY is set)
   auth/                        # OAuth, sessions (HMAC-SHA256), TOFU, middleware
   calendar/                    # Google Calendar v3 client wrapper + extendedProperties helpers
+  category/                    # pure event categorizer (no I/O, exhaustively tested)
   config/                      # env-var loading
   crypto/                      # AES-256-GCM token sealing
   db/                          # pgx repos + scanned struct models
+  hours/                       # pure WorkingHours + window arithmetic + slot finders
   httpx/                       # chi router, html/template + HTMX, handlers
-  sync/                        # rule engine + smart-block engine (pure logic)
+  sync/                        # rule engine + smart-block engine + scheduler (tasks/habits)
   webhook/                     # Google push notification handler
-  worker/                      # per-account goroutines + scheduler
+  worker/                      # per-account goroutines + scheduler tick + AI cleanup
 migrations/                    # *.sql, embedded into the binary via embed.FS
 wiki/                          # user-facing docs, synced to GitHub Wiki
 ```
@@ -70,13 +72,20 @@ wiki/                          # user-facing docs, synced to GitHub Wiki
 Every event skulid writes to Google sets
 `extendedProperties.private` keys that are checked before forwarding:
 
-| Key                          | Set by                       |
-| ---------------------------- | ---------------------------- |
-| `skulidManaged=1`       | every write (rules, blocks, AI) |
-| `skulidRuleId`          | sync rule mirror writes       |
-| `skulidSourceEventId`   | sync rule mirror writes       |
-| `skulidSmartBlockId`    | smart block writes            |
-| `skulidAiSession`       | AI assistant writes           |
+| Key                       | Set by                                    |
+| ------------------------- | ----------------------------------------- |
+| `skulidManaged=1`         | every write (rules, blocks, tasks, habits, AI) |
+| `skulidRuleId`            | sync rule mirror writes                   |
+| `skulidSourceEventId`     | sync rule mirror writes                   |
+| `skulidSmartBlockId`      | smart block writes                        |
+| `skulidTaskId`            | task scheduler writes                     |
+| `skulidHabitId`           | habit scheduler writes                    |
+| `skulidAiSession`         | AI assistant writes                       |
+
+`IsManaged()` recognizes both the `skulid*` keys and the legacy
+`calmAxolotl*` keys (pre-rename) so any old managed event still
+trips the loop guard. Don't remove the legacy check until we're
+confident no pre-rename events exist in production.
 
 The rule engine refuses to forward any event where
 `calendar.IsManaged(ev) == true`. **Don't break this guarantee** —

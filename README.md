@@ -13,17 +13,23 @@ Claude-powered chat lets you talk to your calendars.
 ## Features
 
 - **Sync rules** — mirror events between calendars one-way or
-  bidirectionally, with optional filtering and transformation.
+  bidirectionally, with Reclaim-style 4-level visibility presets,
+  all-day handling modes, and a working-hours-only toggle.
 - **Smart blocks** — auto-maintain focus/busy blocks on a target
-  calendar based on busy time on others, respecting per-block working
-  hours in any IANA timezone.
-- **Webhook + polling** — Google push channels for near-real-time sync
-  with a 5-minute polling fallback.
-- **AI assistant** *(optional)* — chat with Claude to manage your
-  calendars; every write requires a one-click confirmation.
-- **Token sealing** — refresh tokens are AES-256-GCM encrypted at rest.
-- **Single-user TOFU** — first Google login claims the instance; no
-  one else can log in afterward.
+  calendar based on busy time elsewhere.
+- **Tasks** — one-shot work the scheduler auto-places in your next
+  available Working-hours slot.
+- **Habits** — recurring soft blocks (Lunch, Decompress) that drift
+  near an ideal time within ±flex.
+- **Categories** drive event color-coding and weekly hour totals.
+- **Planner** — week timeline of every connected calendar.
+- **Priorities** — Kanban of active tasks by priority bucket.
+- **Buffers** — padding the scheduler keeps around busy time.
+- **AI assistant** *(optional)* — chat with Claude; 17 tools across
+  events, tasks, and habits; every write requires confirmation.
+- **Webhook + polling** — Google push channels with 5-minute fallback.
+- **Token sealing** — refresh tokens AES-256-GCM encrypted at rest.
+- **Single-user TOFU** — first Google login claims the instance.
 
 ## Quick start
 
@@ -46,18 +52,25 @@ and are version-controlled in [`wiki/`](./wiki) for review alongside
 code changes (synced to the Wiki by `.github/workflows/wiki-sync.yml`
 on push to `main`).
 
-| Page                                                                         | What's in it                                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [Home](https://github.com/ryakel/skulid/wiki/Home)                           | Index and orientation                                              |
-| [Getting Started](https://github.com/ryakel/skulid/wiki/Getting-Started)     | Zero-to-running walkthrough                                        |
-| [Architecture](https://github.com/ryakel/skulid/wiki/Architecture)           | Stack, data model, change flow                                     |
-| [Sync Rules](https://github.com/ryakel/skulid/wiki/Sync-Rules)               | Filters, transforms, bidirectional, backfill, examples             |
-| [Smart Blocks](https://github.com/ryakel/skulid/wiki/Smart-Blocks)           | Working hours, DST, recompute, examples                            |
-| [AI Assistant](https://github.com/ryakel/skulid/wiki/AI-Assistant)           | Tools, confirmation flow, persistence                              |
-| [Configuration](https://github.com/ryakel/skulid/wiki/Configuration)         | Every supported environment variable                               |
-| [Operations](https://github.com/ryakel/skulid/wiki/Operations)               | Backups, watch renewal, audit log, troubleshooting                 |
-| [Security Model](https://github.com/ryakel/skulid/wiki/Security-Model)       | Threat model and what we do/don't protect against                  |
-| [Development](https://github.com/ryakel/skulid/wiki/Development)             | Local setup, conventions, adding features                          |
+| Page                                                                       | What's in it                                                       |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Home](https://github.com/ryakel/skulid/wiki/Home)                         | Index and orientation                                              |
+| [Getting Started](https://github.com/ryakel/skulid/wiki/Getting-Started)   | Zero-to-running walkthrough                                        |
+| [Architecture](https://github.com/ryakel/skulid/wiki/Architecture)         | Stack, data model, change flow                                     |
+| [Planner](https://github.com/ryakel/skulid/wiki/Planner)                   | Week timeline view                                                 |
+| [Tasks](https://github.com/ryakel/skulid/wiki/Tasks)                       | Auto-scheduled one-shot blocks                                     |
+| [Habits](https://github.com/ryakel/skulid/wiki/Habits)                     | Recurring soft blocks                                              |
+| [Priorities](https://github.com/ryakel/skulid/wiki/Priorities)             | Kanban view of active tasks                                        |
+| [Sync Rules](https://github.com/ryakel/skulid/wiki/Sync-Rules)             | Visibility modes, all-day, working-hours-only, filters             |
+| [Smart Blocks](https://github.com/ryakel/skulid/wiki/Smart-Blocks)         | Working hours, DST, recompute, examples                            |
+| [Categories](https://github.com/ryakel/skulid/wiki/Categories)             | Built-in palette + auto-categorization heuristics                  |
+| [Hours](https://github.com/ryakel/skulid/wiki/Hours)                       | Working/Personal/Meeting windows per account                       |
+| [Buffers](https://github.com/ryakel/skulid/wiki/Buffers)                   | Padding around scheduled blocks                                    |
+| [AI Assistant](https://github.com/ryakel/skulid/wiki/AI-Assistant)         | Tools, confirmation flow, persistence                              |
+| [Configuration](https://github.com/ryakel/skulid/wiki/Configuration)       | Every supported environment variable                               |
+| [Operations](https://github.com/ryakel/skulid/wiki/Operations)             | Backups, watch renewal, audit log, troubleshooting                 |
+| [Security Model](https://github.com/ryakel/skulid/wiki/Security-Model)     | Threat model and what we do/don't protect against                  |
+| [Development](https://github.com/ryakel/skulid/wiki/Development)           | Local setup, conventions, adding features                          |
 
 ## Status
 
