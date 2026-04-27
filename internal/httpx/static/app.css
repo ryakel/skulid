@@ -266,6 +266,94 @@ table.categories input[type=color] {
 .prio-low      { background: #eef0f5; color: var(--muted); }
 
 /* ------------------------------------------------------------------------- *
+ * Planner — week timeline
+ *
+ * Grid columns: a 60px hours rail + 7 equal-width day columns.
+ * Grid rows: a day-header strip, an all-day strip, then one tall row holding
+ * the absolutely-positioned timed events.
+ * ------------------------------------------------------------------------- */
+
+.planner-header { margin-bottom: 1rem; }
+
+.planner-totals {
+  display: flex; flex-wrap: wrap; gap: .35rem .75rem;
+  padding: .65rem .85rem; margin-bottom: 1rem;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-1);
+}
+.planner-total { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; }
+.planner-total .dot { width: .55rem; height: .55rem; }
+
+.planner-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto auto 1fr;
+  background: var(--card);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow-1);
+}
+.planner-corner { background: #fafbfd; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+
+.planner-day-header {
+  background: #fafbfd; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+  padding: .5rem .65rem; text-align: left;
+}
+.planner-day-header:last-child { border-right: none; }
+.planner-day-header .day-name { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.planner-day-header .day-date { font-weight: 600; font-size: 1rem; margin-top: .1rem; }
+.planner-day-header.is-today .day-date { color: var(--primary); }
+
+.planner-allday-rail {
+  border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+  padding: .35rem .5rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+  background: #fdfdff;
+}
+.planner-allday-cell {
+  border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+  padding: .25rem; min-height: 1.5rem; background: #fdfdff;
+  display: flex; flex-direction: column; gap: .15rem;
+}
+.planner-allday-cell:last-child { border-right: none; }
+.planner-allday {
+  font-size: .72rem; padding: .1rem .4rem; border-radius: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.planner-hours {
+  border-right: 1px solid var(--border);
+  position: relative; min-height: 720px;
+  /* Hour labels are evenly spaced across the day's vertical span. */
+  display: grid; grid-template-rows: repeat(17, 1fr);
+}
+.planner-hour {
+  font-size: .68rem; color: var(--muted); padding: 0 .4rem;
+  border-top: 1px solid var(--border); text-align: right;
+}
+.planner-hour:first-child { border-top: none; }
+
+.planner-day {
+  position: relative; min-height: 720px;
+  border-right: 1px solid var(--border);
+  background-image: repeating-linear-gradient(to bottom,
+    transparent 0,
+    transparent calc(100% / 16 - 1px),
+    var(--border) calc(100% / 16 - 1px),
+    var(--border) calc(100% / 16));
+}
+.planner-day:last-child { border-right: none; }
+.planner-day.is-today { background-color: rgba(91,108,255,.025); }
+
+.planner-event {
+  position: absolute; left: 2px; right: 2px;
+  border-radius: 4px; padding: .15rem .35rem; font-size: .72rem;
+  border-left: 3px solid var(--primary); background: rgba(91,108,255,.12);
+  overflow: hidden; line-height: 1.15;
+  box-shadow: var(--shadow-1);
+}
+.planner-event .ev-title { font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.planner-event .ev-meta  { color: var(--muted); font-size: .65rem; margin-top: .05rem; }
+
+/* ------------------------------------------------------------------------- *
  * Login page (centered, no sidebar)
  * ------------------------------------------------------------------------- */
 

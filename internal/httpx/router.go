@@ -77,6 +77,7 @@ func (s *Server) Router() http.Handler {
 		r.Use(auth.RequireOwner(s.Sessions, s.TOFU))
 
 		r.Get("/", s.handleDashboard)
+		r.Get("/planner", s.handlePlannerPage)
 
 		r.Get("/accounts", s.handleAccountsPage)
 		r.Post("/accounts/connect", s.handleAccountConnect)
