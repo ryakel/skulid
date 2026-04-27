@@ -35,6 +35,7 @@ type Server struct {
 	Managed        *db.ManagedBlockRepo
 	Links          *db.EventLinkRepo
 	Audit          *db.AuditRepo
+	Categories     *db.CategoryRepo
 	Engine         *syncengine.Engine
 	ClientFor      syncengine.ClientFor
 	Worker         *worker.Manager
@@ -99,6 +100,8 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/settings", s.handleSettingsPage)
 		r.Post("/settings/rewatch", s.handleRewatchAll)
+		r.Get("/settings/categories", s.handleCategoriesPage)
+		r.Post("/settings/categories", s.handleCategoriesSave)
 
 		if s.Agent != nil {
 			r.Get("/assistant", s.handleAssistantList)

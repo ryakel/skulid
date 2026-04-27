@@ -1,0 +1,27 @@
+{{define "body"}}
+<div class="row">
+<h1>Categories</h1>
+<a href="/settings" class="button secondary">← Back to settings</a>
+</div>
+
+<p class="muted">Eight built-in categories, used for color-coding the planner and pinning sync rules / smart blocks. The slug is the stable identifier — only the display name and color are editable.</p>
+
+<form method="post" action="/settings/categories" class="stack">
+<table class="categories">
+  <thead><tr><th style="width:1%">Color</th><th>Name</th><th>Slug</th></tr></thead>
+  <tbody>
+  {{range .Categories}}
+    <tr>
+      <td><input type="color" name="color_{{.ID}}" value="{{.Color}}"></td>
+      <td><input type="text" name="name_{{.ID}}" value="{{.Name}}" required></td>
+      <td><code>{{.Slug}}</code></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+<div class="row" style="justify-content:flex-start;gap:.5rem">
+  <button type="submit">Save changes</button>
+  <a href="/settings" class="button secondary">Cancel</a>
+</div>
+</form>
+{{end}}

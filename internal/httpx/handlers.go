@@ -729,6 +729,52 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "settings", data)
 }
 
+// ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleCategoriesPage(w http.ResponseWriter, r *http.Request) {
+	cats, err := s.Categories.List(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := s.pageData(r, "Categories")
+	data["Categories"] = cats
+	s.render(w, "categories", data)
+}
+
+func (s *Server) handleCategoriesSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	cats, err := s.Categories.List(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, c := range cats {
+		idStr := strconv.FormatInt(c.ID, 10)
+		name := strings.TrimSpace(r.FormValue("name_" + idStr))
+		color := strings.TrimSpace(r.FormValue("color_" + idStr))
+		if name == "" {
+			name = c.Name
+		}
+		if color == "" {
+			color = c.Color
+		}
+		if name == c.Name && color == c.Color {
+			continue
+		}
+		if err := s.Categories.UpdateAppearance(r.Context(), c.ID, name, color); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	http.Redirect(w, r, "/settings/categories", http.StatusFound)
+}
+
 func (s *Server) handleRewatchAll(w http.ResponseWriter, r *http.Request) {
 	cals, err := s.Calendars.ListAll(r.Context())
 	if err != nil {

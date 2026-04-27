@@ -63,3 +63,6 @@ pre code { display: block; padding: .5rem .75rem; overflow-x: auto; white-space:
 .action-card { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 8px; padding: .75rem 1rem; margin: .5rem 0; }
 .action-card details { margin: .5rem 0; }
 .action-card summary { cursor: pointer; color: var(--muted); font-size: .85em; }
+table.categories input[type=text] { width: 100%; font: inherit; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 6px; }
+table.categories input[type=color] { width: 2.5rem; height: 2rem; border: 1px solid var(--border); border-radius: 6px; padding: 0; cursor: pointer; }
+.cat-pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; color: #fff; background: var(--muted); white-space: nowrap; }

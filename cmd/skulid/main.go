@@ -70,6 +70,7 @@ func run(log *slog.Logger) error {
 	managed := db.NewManagedBlockRepo(pool)
 	links := db.NewEventLinkRepo(pool)
 	audit := db.NewAuditRepo(pool)
+	categories := db.NewCategoryRepo(pool)
 	aiConversations := db.NewAIConversationRepo(pool)
 	aiMessages := db.NewAIMessageRepo(pool)
 	aiPending := db.NewAIPendingActionRepo(pool)
@@ -136,6 +137,7 @@ func run(log *slog.Logger) error {
 		Managed:        managed,
 		Links:          links,
 		Audit:          audit,
+		Categories:     categories,
 		Engine:          engine,
 		ClientFor:       clientFor,
 		Worker:          mgr,
