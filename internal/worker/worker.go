@@ -26,6 +26,7 @@ const (
 	channelRenewTick = time.Hour
 	staleAfter       = 10 * time.Minute
 	aiCleanupTick    = 6 * time.Hour
+	maintenanceTick  = 6 * time.Hour
 )
 
 // Manager coordinates per-account work and the cross-cutting scheduler. Jobs
@@ -41,8 +42,11 @@ type Manager struct {
 	audit       *db.AuditRepo
 	clientFor   syncengine.ClientFor
 	engine      *syncengine.Engine
-	smartEngine *syncengine.SmartBlockEngine
+	smartEngine  *syncengine.SmartBlockEngine
 	decompEngine *syncengine.DecompressionEngine // optional
+	scheduler    *syncengine.Scheduler           // optional; gates daily-maintenance tick
+	tasks        *db.TaskRepo
+	habits       *db.HabitRepo
 
 	externalURL string
 	log         *slog.Logger
@@ -102,6 +106,15 @@ func (m *Manager) SetDecompressionEngine(e *syncengine.DecompressionEngine) {
 	m.decompEngine = e
 }
 
+// SetMaintenanceDeps wires in the task/habit repos and scheduler so the
+// daily-maintenance tick can refresh placements as the horizon walks forward.
+// Without it, MaintenanceTick is a no-op.
+func (m *Manager) SetMaintenanceDeps(tasks *db.TaskRepo, habits *db.HabitRepo, sch *syncengine.Scheduler) {
+	m.tasks = tasks
+	m.habits = habits
+	m.scheduler = sch
+}
+
 // EnqueueDecompressionForCalendar debounces (15s) and recomputes decompress
 // events for the given calendar.
 func (m *Manager) EnqueueDecompressionForCalendar(calendarID int64) {
@@ -149,7 +162,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	for _, a := range accounts {
 		m.ensureWorker(a.ID)
 	}
-	go m.scheduler(ctx)
+	go m.runScheduler(ctx)
 	return nil
 }
 
@@ -244,18 +257,24 @@ func (m *Manager) SetAIConversationCleanup(repo *db.AIConversationRepo, maxAge t
 	m.aiMaxAge = maxAge
 }
 
-// scheduler runs the polling fallback and watch-channel renewal loops.
-func (m *Manager) scheduler(ctx context.Context) {
+// runScheduler runs the polling fallback, watch-channel renewal, AI
+// conversation cleanup, and the daily maintenance pass that keeps habit/task
+// placements fresh as the horizon walks forward.
+func (m *Manager) runScheduler(ctx context.Context) {
 	pollTicker := time.NewTicker(pollInterval)
 	renewTicker := time.NewTicker(channelRenewTick)
 	cleanupTicker := time.NewTicker(aiCleanupTick)
+	maintTicker := time.NewTicker(maintenanceTick)
 	defer pollTicker.Stop()
 	defer renewTicker.Stop()
 	defer cleanupTicker.Stop()
+	defer maintTicker.Stop()
 
-	// Run an initial pass shortly after startup so we don't wait 5 min for the first sync.
+	// Run an initial pass shortly after startup so we don't wait for the first ticks.
 	startup := time.NewTimer(15 * time.Second)
+	maintStartup := time.NewTimer(60 * time.Second)
 	defer startup.Stop()
+	defer maintStartup.Stop()
 
 	for {
 		select {
@@ -267,13 +286,72 @@ func (m *Manager) scheduler(ctx context.Context) {
 			m.runPollPass(ctx)
 			m.runRenewPass(ctx)
 			m.runAICleanup(ctx)
+		case <-maintStartup.C:
+			m.runMaintenance(ctx)
 		case <-pollTicker.C:
 			m.runPollPass(ctx)
 		case <-renewTicker.C:
 			m.runRenewPass(ctx)
 		case <-cleanupTicker.C:
 			m.runAICleanup(ctx)
+		case <-maintTicker.C:
+			m.runMaintenance(ctx)
 		}
+	}
+}
+
+// runMaintenance refreshes scheduled placements:
+//
+//   - For every enabled habit, re-runs PlaceHabit so the rolling horizon
+//     extends as `today` advances.
+//   - For every task that's pending or whose scheduled window has already
+//     passed (the user procrastinated past the placement), re-runs PlaceTask
+//     so it lands on the next available slot.
+//
+// Heavy operation; gated behind SetMaintenanceDeps so test harnesses and
+// non-scheduler-using deployments stay quiet.
+func (m *Manager) runMaintenance(ctx context.Context) {
+	if m.scheduler == nil || m.habits == nil || m.tasks == nil {
+		return
+	}
+	now := time.Now()
+
+	hs, err := m.habits.ListEnabled(ctx)
+	if err != nil {
+		m.log.Error("maintenance list habits failed", "err", err)
+	} else {
+		for _, h := range hs {
+			if err := m.scheduler.PlaceHabit(ctx, h.ID); err != nil {
+				m.log.Warn("maintenance place habit failed", "habit_id", h.ID, "err", err)
+			}
+		}
+		if len(hs) > 0 {
+			m.log.Info("maintenance habits refreshed", "count", len(hs))
+		}
+	}
+
+	ts, err := m.tasks.ListAllActive(ctx)
+	if err != nil {
+		m.log.Error("maintenance list tasks failed", "err", err)
+		return
+	}
+	refreshed := 0
+	for _, t := range ts {
+		needsRefresh := t.Status == db.TaskPending
+		if t.Status == db.TaskScheduled && t.ScheduledEndsAt != nil && t.ScheduledEndsAt.Before(now) {
+			needsRefresh = true
+		}
+		if !needsRefresh {
+			continue
+		}
+		if err := m.scheduler.PlaceTask(ctx, t.ID); err != nil {
+			m.log.Warn("maintenance place task failed", "task_id", t.ID, "err", err)
+			continue
+		}
+		refreshed++
+	}
+	if refreshed > 0 {
+		m.log.Info("maintenance tasks refreshed", "count", refreshed)
 	}
 }
 

@@ -101,6 +101,7 @@ func run(log *slog.Logger) error {
 		clientFor, engine, smartEngine, cfg.ExternalURL, log)
 	mgr.SetAIConversationCleanup(aiConversations, 30*24*time.Hour)
 	mgr.SetDecompressionEngine(decompEngine)
+	mgr.SetMaintenanceDeps(tasks, habits, scheduler)
 
 	var agent *ai.Agent
 	if cfg.AnthropicAPIKey != "" {
