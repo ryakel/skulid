@@ -39,7 +39,7 @@ channel and creates a new one for every calendar.
 | Column  | Meaning                                                   |
 | ------- | --------------------------------------------------------- |
 | When    | UTC timestamp                                             |
-| Kind    | `rule`, `smart_block`, or `ai`                            |
+| Kind    | `rule`, `smart_block`, `task`, `habit`, `buffer`, or `ai` |
 | Rule    | Sync rule ID (if `kind=rule`)                             |
 | Block   | Smart block ID (if `kind=smart_block`)                    |
 | Action  | `create`, `update`, `delete`, `error`, etc.               |

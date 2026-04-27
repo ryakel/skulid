@@ -1,6 +1,15 @@
 # Hours
 
-skulid stores three windows per account, mirroring Reclaim's model:
+skulid stores three windows per account *and* per calendar, mirroring
+Reclaim's model with one extra dimension. The per-calendar override
+chain is:
+
+```
+calendar override  ->  account default  ->  built-in default
+```
+
+Edit account-level hours at **Settings → Hours**, calendar-level
+overrides at **Accounts → calendar Settings**. Three kinds:
 
 | Kind     | Used by                                                                |
 | -------- | ---------------------------------------------------------------------- |
@@ -33,6 +42,12 @@ in America/Chicago.
 
 ## Effective hours
 
-`db.Account.EffectiveHours(kind)` returns the JSON blob the engine
-should use after applying fallbacks. Always call this rather than
-reading the column directly, so the fallback logic is preserved.
+`db.EffectiveCalendarHours(cal, account, kind)` returns the JSON blob
+the engine should use after applying both fallback chains: per-calendar
+override first, then per-account fallback (with personal/meeting
+fallback to working inside the account). Always call this rather than
+reading either column directly, so the fallback logic is preserved.
+
+`db.Account.EffectiveHours(kind)` is the lower-level account-only
+helper; use it only when you don't have a calendar in context (e.g.
+for legacy migrations).

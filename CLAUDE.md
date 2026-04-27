@@ -74,12 +74,14 @@ Every event skulid writes to Google sets
 
 | Key                       | Set by                                    |
 | ------------------------- | ----------------------------------------- |
-| `skulidManaged=1`         | every write (rules, blocks, tasks, habits, AI) |
+| `skulidManaged=1`         | every write (rules, blocks, tasks, habits, buffers, AI) |
 | `skulidRuleId`            | sync rule mirror writes                   |
 | `skulidSourceEventId`     | sync rule mirror writes                   |
 | `skulidSmartBlockId`      | smart block writes                        |
 | `skulidTaskId`            | task scheduler writes                     |
 | `skulidHabitId`           | habit scheduler writes                    |
+| `skulidBufferType`        | "decompression" / "travel" — buffer engine writes |
+| `skulidBufferForEventId`  | Google ID of the meeting a buffer trails  |
 | `skulidAiSession`         | AI assistant writes                       |
 
 `IsManaged()` recognizes both the `skulid*` keys and the legacy
@@ -116,6 +118,11 @@ the suite, update the suite.
 - All goroutines listen for `m.stop` so shutdown is clean.
 - Smart-block recompute is debounced (15s) per block — preserve that
   when adding new triggers.
+- Decompression recompute is debounced (15s) per calendar; fires
+  after every successful incremental sync.
+- The 6-hour maintenance tick (`runMaintenance`) re-runs `PlaceHabit`
+  and `PlaceTask` so rolling horizons stay current. Adding a new
+  scheduler-driven entity? Hook it in there.
 
 ### Touching the sync engine
 
