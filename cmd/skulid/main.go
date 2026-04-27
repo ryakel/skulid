@@ -88,7 +88,7 @@ func run(log *slog.Logger) error {
 		return calendar.New(ctx, ts)
 	}
 
-	engine := syncengine.NewEngine(rules, calendars, links, audit, clientFor, log)
+	engine := syncengine.NewEngine(rules, accounts, calendars, links, audit, clientFor, log)
 	smartEngine := syncengine.NewSmartBlockEngine(blocks, managed, calendars, audit, clientFor, log)
 
 	mgr := worker.NewManager(pool, accounts, calendars, tokens, rules, blocks, links, audit,

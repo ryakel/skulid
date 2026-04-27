@@ -336,9 +336,11 @@ func calLabel(idx map[int64]calendarOption, id int64) string {
 func (s *Server) handleRuleEditPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rule := &db.SyncRule{
-		Direction:   "one_way",
-		PrimarySide: "source",
-		Enabled:     true,
+		Direction:      "one_way",
+		PrimarySide:    "source",
+		Enabled:        true,
+		VisibilityMode: "busy_for_all",
+		AllDayMode:     "sync_all",
 	}
 	if idStr := chi.URLParam(r, "id"); idStr != "" {
 		id, err := strconv.ParseInt(idStr, 10, 64)
@@ -364,11 +366,17 @@ func (s *Server) handleRuleEditPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	cats, err := s.Categories.List(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	data := s.pageData(r, "Rule")
 	data["Rule"] = rule
 	data["Filter"] = filter
 	data["Transform"] = transform
 	data["Calendars"] = cals
+	data["Categories"] = cats
 	s.render(w, "rule_edit", data)
 }
 
@@ -400,27 +408,29 @@ func (s *Server) handleRuleSave(w http.ResponseWriter, r *http.Request) {
 	rule.PrimarySide = strOr(r.FormValue("primary_side"), "source")
 	rule.BackfillDays = int(parseInt64(r.FormValue("backfill_days")))
 	rule.Enabled = r.FormValue("enabled") != ""
+	rule.VisibilityMode = strOr(r.FormValue("visibility_mode"), "busy_for_all")
+	rule.AllDayMode = strOr(r.FormValue("all_day_mode"), "sync_all")
+	rule.WorkingHoursOnly = r.FormValue("working_hours_only") != ""
+	if catID := parseInt64(r.FormValue("category_id")); catID > 0 {
+		rule.CategoryID = &catID
+	} else {
+		rule.CategoryID = nil
+	}
 
 	filter := syncengine.Filter{
 		TitleRegex:  strings.TrimSpace(r.FormValue("filter_title_regex")),
 		ColorIDs:    splitCSV(r.FormValue("filter_color_ids")),
 		AttendeeAny: splitCSV(r.FormValue("filter_attendees")),
 		FreeBusy:    r.FormValue("filter_free_busy"),
-		AllDay:      r.FormValue("filter_all_day"),
 		StartHour:   int(parseInt64(r.FormValue("filter_start_hour"))),
 		EndHour:     int(parseInt64(r.FormValue("filter_end_hour"))),
 	}
-	transform := syncengine.Transform{
-		TitleTemplate:    strings.TrimSpace(r.FormValue("transform_title")),
-		MarkBusy:         r.FormValue("transform_mark_busy") != "",
-		StripAttendees:   r.FormValue("transform_strip_attendees") != "",
-		StripDescription: r.FormValue("transform_strip_description") != "",
-		Visibility:       r.FormValue("transform_visibility"),
-	}
+	// Visibility mode now drives the transform; legacy Transform JSON is no
+	// longer written from the form. We store an empty {} so older readers
+	// still work.
 	fb, _ := json.Marshal(filter)
-	tb, _ := json.Marshal(transform)
 	rule.Filter = fb
-	rule.Transform = tb
+	rule.Transform = json.RawMessage(`{}`)
 
 	if rule.Name == "" || rule.SourceCalendarID == 0 || rule.TargetCalendarID == 0 {
 		http.Error(w, "name, source, and target are required", http.StatusBadRequest)

@@ -56,6 +56,19 @@ type SyncRule struct {
 	BackfillDone       bool
 	Enabled            bool
 	CreatedAt          time.Time
+	// Optional category to pin the mirror event to. NULL means use the
+	// auto-categorizer at planner-render time.
+	CategoryID         *int64
+	// Visibility preset. One of: personal_commitment | busy_for_all |
+	// details_for_you_busy_others | details_for_you_and_access. Drives the
+	// engine's transform; the legacy Transform JSON is honored only when
+	// VisibilityMode is empty (it never is for new rules).
+	VisibilityMode     string
+	// One of: skip | only_busy | sync_all.
+	AllDayMode         string
+	// When true, only mirror events whose start time lies within the source
+	// account's Working hours.
+	WorkingHoursOnly   bool
 }
 
 type SmartBlock struct {

@@ -26,6 +26,58 @@ func ParseTransform(raw json.RawMessage) (Transform, error) {
 	return t, nil
 }
 
+// Visibility mode presets matching Reclaim's four levels. Picking one of
+// these expands into a fully-specified Transform via TransformForMode.
+const (
+	VisibilityPersonalCommitment   = "personal_commitment"
+	VisibilityBusyForAll           = "busy_for_all"
+	VisibilityDetailsForYouOthers  = "details_for_you_busy_others"
+	VisibilityDetailsForYouAccess  = "details_for_you_and_access"
+)
+
+// TransformForMode returns a Transform derived from a visibility mode preset.
+// Unknown modes (including empty string for legacy rules) collapse to the
+// "Busy for all" default — same as Reclaim's safe pick.
+func TransformForMode(mode string) Transform {
+	switch mode {
+	case VisibilityPersonalCommitment:
+		return Transform{
+			TitleTemplate:    "Personal Commitment",
+			MarkBusy:         true,
+			StripAttendees:   true,
+			StripDescription: true,
+			Visibility:       "private",
+		}
+	case VisibilityDetailsForYouOthers:
+		// Title preserved; description preserved (you'll see them on your
+		// calendar). Attendees stripped so other people scanning your
+		// calendar don't see who you're meeting with. Visibility=private
+		// hides the details from anyone who hasn't been granted access.
+		return Transform{
+			MarkBusy:       true,
+			StripAttendees: true,
+			Visibility:     "private",
+		}
+	case VisibilityDetailsForYouAccess:
+		// Everything kept; visibility=default lets Google's normal sharing
+		// rules decide who sees details. The mirror just adds a busy hold.
+		return Transform{
+			MarkBusy:   true,
+			Visibility: "default",
+		}
+	case VisibilityBusyForAll:
+		fallthrough
+	default:
+		return Transform{
+			TitleTemplate:    "Busy",
+			MarkBusy:         true,
+			StripAttendees:   true,
+			StripDescription: true,
+			Visibility:       "private",
+		}
+	}
+}
+
 // Apply produces a new event payload suitable for inserting/updating on the
 // target calendar. Time fields, recurrence, and conferenceData are preserved
 // from the source.

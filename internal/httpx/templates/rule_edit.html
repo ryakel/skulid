@@ -2,30 +2,62 @@
 <h1>{{if .Rule.ID}}Edit rule{{else}}New rule{{end}}</h1>
 <form method="post" action="{{if .Rule.ID}}/rules/{{.Rule.ID}}{{else}}/rules{{end}}" class="stack">
   <label>Name <input type="text" name="name" value="{{.Rule.Name}}" required></label>
+
   <label>Source calendar
     <select name="source_calendar_id" required>
       <option value="">Select…</option>
       {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Rule.SourceCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
     </select>
   </label>
+
   <label>Target calendar
     <select name="target_calendar_id" required>
       <option value="">Select…</option>
       {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Rule.TargetCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
     </select>
   </label>
+
   <label>Direction
     <select name="direction">
       <option value="one_way" {{if eq .Rule.Direction "one_way"}}selected{{end}}>one way (source → target)</option>
       <option value="bidirectional" {{if eq .Rule.Direction "bidirectional"}}selected{{end}}>bidirectional</option>
     </select>
   </label>
+
   <label>Primary side (used to break ties on bidirectional conflicts)
     <select name="primary_side">
       <option value="source" {{if eq .Rule.PrimarySide "source"}}selected{{end}}>source</option>
       <option value="target" {{if eq .Rule.PrimarySide "target"}}selected{{end}}>target</option>
     </select>
   </label>
+
+  <label>Category (color &amp; grouping on the planner)
+    <select name="category_id">
+      <option value="">Auto-categorize</option>
+      {{range .Categories}}<option value="{{.ID}}" {{if and $.Rule.CategoryID (eq .ID (deref $.Rule.CategoryID))}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+
+  <fieldset>
+    <legend>Visibility</legend>
+    <p class="muted">How the mirror appears to you and to people you share the target calendar with.</p>
+    <label class="radio">
+      <input type="radio" name="visibility_mode" value="personal_commitment" {{if eq .Rule.VisibilityMode "personal_commitment"}}checked{{end}}>
+      <strong>Personal Commitment for all</strong> — title hidden, looks like a personal time-block.
+    </label>
+    <label class="radio">
+      <input type="radio" name="visibility_mode" value="busy_for_all" {{if eq .Rule.VisibilityMode "busy_for_all"}}checked{{end}}>
+      <strong>Busy for all</strong> — title shows as "Busy"; everyone sees it as opaque/busy.
+    </label>
+    <label class="radio">
+      <input type="radio" name="visibility_mode" value="details_for_you_busy_others" {{if eq .Rule.VisibilityMode "details_for_you_busy_others"}}checked{{end}}>
+      <strong>Details for you, busy for others</strong> — you see real title/description; people see Busy.
+    </label>
+    <label class="radio">
+      <input type="radio" name="visibility_mode" value="details_for_you_and_access" {{if eq .Rule.VisibilityMode "details_for_you_and_access"}}checked{{end}}>
+      <strong>Details for you and those with access</strong> — Google's normal sharing rules apply.
+    </label>
+  </fieldset>
 
   <fieldset>
     <legend>Filter</legend>
@@ -43,32 +75,18 @@
         <option value="free" {{if eq .Filter.FreeBusy "free"}}selected{{end}}>free only</option>
       </select>
     </label>
-    <label>All-day
-      <select name="filter_all_day">
-        <option value="" {{if eq .Filter.AllDay ""}}selected{{end}}>include both</option>
-        <option value="only" {{if eq .Filter.AllDay "only"}}selected{{end}}>all-day only</option>
-        <option value="exclude" {{if eq .Filter.AllDay "exclude"}}selected{{end}}>exclude all-day</option>
-      </select>
-    </label>
     <label>Start hour ≥ <input type="number" min="0" max="23" name="filter_start_hour" value="{{.Filter.StartHour}}"></label>
     <label>Start hour &lt; <input type="number" min="0" max="23" name="filter_end_hour" value="{{.Filter.EndHour}}"></label>
   </fieldset>
 
   <fieldset>
-    <legend>Transform</legend>
-    <label>Title template (use {title} and {location}) <input type="text" name="transform_title" value="{{.Transform.TitleTemplate}}" placeholder="Busy"></label>
-    <label class="checkbox"><input type="checkbox" name="transform_mark_busy" {{if .Transform.MarkBusy}}checked{{end}}> Force "busy" transparency</label>
-    <label class="checkbox"><input type="checkbox" name="transform_strip_attendees" {{if .Transform.StripAttendees}}checked{{end}}> Strip attendees</label>
-    <label class="checkbox"><input type="checkbox" name="transform_strip_description" {{if .Transform.StripDescription}}checked{{end}}> Strip description</label>
-    <label>Visibility
-      <select name="transform_visibility">
-        <option value="" {{if eq .Transform.Visibility ""}}selected{{end}}>(unchanged)</option>
-        <option value="default" {{if eq .Transform.Visibility "default"}}selected{{end}}>default</option>
-        <option value="public" {{if eq .Transform.Visibility "public"}}selected{{end}}>public</option>
-        <option value="private" {{if eq .Transform.Visibility "private"}}selected{{end}}>private</option>
-      </select>
-    </label>
+    <legend>All-day events</legend>
+    <label class="radio"><input type="radio" name="all_day_mode" value="sync_all" {{if or (eq .Rule.AllDayMode "sync_all") (eq .Rule.AllDayMode "")}}checked{{end}}> Sync all all-day events</label>
+    <label class="radio"><input type="radio" name="all_day_mode" value="only_busy" {{if eq .Rule.AllDayMode "only_busy"}}checked{{end}}> Sync only all-day events marked busy</label>
+    <label class="radio"><input type="radio" name="all_day_mode" value="skip" {{if eq .Rule.AllDayMode "skip"}}checked{{end}}> Don't sync all-day events</label>
   </fieldset>
+
+  <label class="checkbox"><input type="checkbox" name="working_hours_only" {{if .Rule.WorkingHoursOnly}}checked{{end}}> Only sync events that fall inside the source account's <a href="/settings/hours">Working hours</a></label>
 
   <label>Backfill last N days when saved (0 = forward-only)
     <input type="number" min="0" max="365" name="backfill_days" value="{{.Rule.BackfillDays}}">
