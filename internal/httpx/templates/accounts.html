@@ -21,7 +21,12 @@
     <tr><td colspan="4" class="nested">
       <ul class="calendars">
       {{range .}}
-        <li><span class="dot" style="background:{{.Color}}"></span><strong>{{.Summary}}</strong> <span class="muted">{{.TimeZone}} · {{.GoogleCalendarID}}</span></li>
+        <li>
+          <span class="dot" style="background:{{.Color}}"></span>
+          <strong>{{.Summary}}</strong>
+          <span class="muted">{{.TimeZone}} · {{.GoogleCalendarID}}</span>
+          <a href="/calendars/{{.ID}}" class="muted" style="margin-left:auto">Settings →</a>
+        </li>
       {{end}}
       </ul>
     </td></tr>

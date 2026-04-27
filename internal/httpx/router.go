@@ -84,6 +84,8 @@ func (s *Server) Router() http.Handler {
 		r.Post("/accounts/connect", s.handleAccountConnect)
 		r.Post("/accounts/{id}/refresh", s.handleAccountRefresh)
 		r.Post("/accounts/{id}/delete", s.handleAccountDelete)
+		r.Get("/calendars/{id}", s.handleCalendarSettings)
+		r.Post("/calendars/{id}", s.handleCalendarSettingsSave)
 
 		r.Get("/rules", s.handleRulesPage)
 		r.Get("/rules/new", s.handleRuleEditPage)

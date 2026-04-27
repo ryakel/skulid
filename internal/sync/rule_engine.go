@@ -142,7 +142,7 @@ func (e *Engine) applyRule(ctx context.Context, rule db.SyncRule, ev *gcal.Event
 
 	matches := filter.Match(ev) && allowedByAllDayMode(rule.AllDayMode, ev)
 	if matches && rule.WorkingHoursOnly {
-		ok, err := e.eventWithinAccountWorkingHours(ctx, srcCal.AccountID, ev)
+		ok, err := e.eventWithinWorkingHours(ctx, srcCal, ev)
 		if err != nil {
 			return fmt.Errorf("working hours check: %w", err)
 		}
@@ -285,10 +285,10 @@ func isAllDayEvent(ev *gcal.Event) bool {
 	return ev.Start != nil && ev.Start.DateTime == "" && ev.Start.Date != ""
 }
 
-// eventWithinAccountWorkingHours reports whether the event's start time lies
-// inside any of the account's working-hours windows (or any of the default
-// windows if the account hasn't set its own).
-func (e *Engine) eventWithinAccountWorkingHours(ctx context.Context, accountID int64, ev *gcal.Event) (bool, error) {
+// eventWithinWorkingHours reports whether the event's start time lies inside
+// any of the source calendar's effective Working hours — calendar override,
+// then account default, then the default window.
+func (e *Engine) eventWithinWorkingHours(ctx context.Context, srcCal *db.Calendar, ev *gcal.Event) (bool, error) {
 	if ev.Start == nil || ev.Start.DateTime == "" {
 		// All-day events have already been gated by allowedByAllDayMode; if
 		// they made it here we don't try to clock-time-bound them.
@@ -298,11 +298,11 @@ func (e *Engine) eventWithinAccountWorkingHours(ctx context.Context, accountID i
 	if err != nil {
 		return false, fmt.Errorf("parse start: %w", err)
 	}
-	acct, err := e.accounts.Get(ctx, accountID)
+	acct, err := e.accounts.Get(ctx, srcCal.AccountID)
 	if err != nil || acct == nil {
 		return false, fmt.Errorf("load account: %w", err)
 	}
-	wh, err := hours.Parse(acct.EffectiveHours(db.HoursWorking))
+	wh, err := hours.Parse(db.EffectiveCalendarHours(srcCal, acct, db.HoursWorking))
 	if err != nil {
 		return false, fmt.Errorf("parse hours: %w", err)
 	}

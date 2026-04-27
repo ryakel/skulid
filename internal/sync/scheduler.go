@@ -71,7 +71,7 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 		return err
 	}
 
-	wh, err := hours.Parse(acct.EffectiveHours(db.HoursWorking))
+	wh, err := hours.Parse(db.EffectiveCalendarHours(cal, acct, db.HoursWorking))
 	if err != nil {
 		return fmt.Errorf("parse hours: %w", err)
 	}
@@ -92,7 +92,7 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	}
 
 	avail := hours.Expand(wh, from, to, loc)
-	busy, err := s.busyOn(ctx, cli, cal.GoogleCalendarID, from, to, wh.TimeZone)
+	busy, err := s.busyOn(ctx, cli, cal, from, to, wh.TimeZone)
 	if err != nil {
 		return err
 	}
@@ -176,13 +176,13 @@ func (s *Scheduler) PlaceAllPending(ctx context.Context) {
 	}
 }
 
-// busyOn pulls freebusy for one Google calendar and converts to hours.Window.
-// The result is post-padded by the configured buffer minutes (Reclaim's
-// task-break + decompression rolled up; v1 can't tell the two sources apart
-// from freebusy output alone).
-func (s *Scheduler) busyOn(ctx context.Context, cli *calendar.Client, googleCalID string,
+// busyOn pulls freebusy for one calendar and converts to hours.Window. The
+// result is post-padded by the calendar's effective buffer settings (per-
+// calendar override → global setting), rolled up into one universal padding
+// since freebusy output doesn't distinguish task-break from decompression.
+func (s *Scheduler) busyOn(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
 	from, to time.Time, tz string) ([]hours.Window, error) {
-	fb, err := cli.FreeBusy(ctx, []string{googleCalID}, from, to, tz)
+	fb, err := cli.FreeBusy(ctx, []string{cal.GoogleCalendarID}, from, to, tz)
 	if err != nil {
 		return nil, fmt.Errorf("freebusy: %w", err)
 	}
@@ -200,17 +200,17 @@ func (s *Scheduler) busyOn(ctx context.Context, cli *calendar.Client, googleCalI
 			out = append(out, hours.Window{Start: ps, End: pe})
 		}
 	}
-	out = s.applyBufferPadding(ctx, out)
+	out = s.applyBufferPadding(ctx, cal, out)
 	return hours.Merge(out), nil
 }
 
-// applyBufferPadding extends every busy window's end by the configured padding
-// minutes. Caller still merges, so adjacent paddings collapse correctly.
-func (s *Scheduler) applyBufferPadding(ctx context.Context, in []hours.Window) []hours.Window {
+// applyBufferPadding extends every busy window's end by the calendar's
+// effective padding minutes. Caller still merges, so adjacent paddings collapse.
+func (s *Scheduler) applyBufferPadding(ctx context.Context, cal *db.Calendar, in []hours.Window) []hours.Window {
 	if s.settings == nil || len(in) == 0 {
 		return in
 	}
-	pad := time.Duration(db.LoadBuffers(ctx, s.settings).PaddingMinutes()) * time.Minute
+	pad := time.Duration(db.EffectiveCalendarBuffers(ctx, s.settings, cal).PaddingMinutes()) * time.Minute
 	if pad <= 0 {
 		return in
 	}
@@ -260,7 +260,7 @@ func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
 		return err
 	}
 
-	wh, err := hours.Parse(acct.EffectiveHours(db.HoursKind(h.HoursKind)))
+	wh, err := hours.Parse(db.EffectiveCalendarHours(cal, acct, db.HoursKind(h.HoursKind)))
 	if err != nil {
 		return fmt.Errorf("parse hours: %w", err)
 	}
@@ -314,7 +314,7 @@ func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
 		dayStart := day
 		dayEnd := day.AddDate(0, 0, 1)
 		avail := hours.Expand(wh, dayStart, dayEnd, loc)
-		busy, err := s.busyOn(ctx, cli, cal.GoogleCalendarID, dayStart, dayEnd, wh.TimeZone)
+		busy, err := s.busyOn(ctx, cli, cal, dayStart, dayEnd, wh.TimeZone)
 		if err != nil {
 			s.log.Warn("habit busy fetch failed", "habit_id", h.ID, "day", key, "err", err)
 			continue

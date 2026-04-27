@@ -22,13 +22,21 @@ type Account struct {
 }
 
 type Calendar struct {
-	ID               int64
-	AccountID        int64
-	GoogleCalendarID string
-	Summary          string
-	TimeZone         string
-	Color            string
-	LastSyncedAt     *time.Time
+	ID                int64
+	AccountID         int64
+	GoogleCalendarID  string
+	Summary           string
+	TimeZone          string
+	Color             string
+	LastSyncedAt      *time.Time
+	DefaultCategoryID *int64
+	// Per-calendar hour overrides. NULL means fall back to the owning account.
+	WorkingHours      json.RawMessage
+	PersonalHours     json.RawMessage
+	MeetingHours      json.RawMessage
+	// Per-calendar buffer override. Empty means fall back to the global
+	// `setting.buffers` row. Same comma-separated string format.
+	Buffers           string
 }
 
 type SyncToken struct {

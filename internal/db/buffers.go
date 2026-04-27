@@ -23,7 +23,17 @@ type BufferSettings struct {
 // unparsable values default to zero.
 func LoadBuffers(ctx context.Context, r *SettingRepo) BufferSettings {
 	v, ok, err := r.Get(ctx, SettingBuffers)
-	if err != nil || !ok || strings.TrimSpace(v) == "" {
+	if err != nil || !ok {
+		return BufferSettings{}
+	}
+	return parseBuffers(v)
+}
+
+// parseBuffers turns the comma-separated wire format ("a,b,c") into a typed
+// struct. Empty/garbage values become zero. Used for both global and
+// per-calendar buffers since they share the same encoding.
+func parseBuffers(v string) BufferSettings {
+	if strings.TrimSpace(v) == "" {
 		return BufferSettings{}
 	}
 	parts := strings.Split(v, ",")
@@ -40,11 +50,16 @@ func LoadBuffers(ctx context.Context, r *SettingRepo) BufferSettings {
 	return out
 }
 
+// EncodeBuffers is the inverse of parseBuffers; rendered for storage in either
+// the global setting row or the per-calendar column.
+func EncodeBuffers(b BufferSettings) string {
+	return fmt.Sprintf("%d,%d,%d", clampNonNeg(b.TaskHabitBreakMinutes),
+		clampNonNeg(b.DecompressionMinutes), clampNonNeg(b.TravelMinutes))
+}
+
 // SaveBuffers persists the buffer settings as a single comma-separated row.
 func SaveBuffers(ctx context.Context, r *SettingRepo, b BufferSettings) error {
-	v := fmt.Sprintf("%d,%d,%d", clampNonNeg(b.TaskHabitBreakMinutes),
-		clampNonNeg(b.DecompressionMinutes), clampNonNeg(b.TravelMinutes))
-	return r.Set(ctx, SettingBuffers, v)
+	return r.Set(ctx, SettingBuffers, EncodeBuffers(b))
 }
 
 // PaddingMinutes is the universal padding the scheduler should add after every
