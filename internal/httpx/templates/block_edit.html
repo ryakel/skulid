@@ -1,0 +1,43 @@
+{{define "body"}}
+<h1>{{if .Block.ID}}Edit smart block{{else}}New smart block{{end}}</h1>
+<form method="post" action="{{if .Block.ID}}/blocks/{{.Block.ID}}{{else}}/blocks{{end}}" class="stack">
+  <label>Name <input type="text" name="name" value="{{.Block.Name}}" required></label>
+
+  <label>Target calendar (where blocks are written)
+    <select name="target_calendar_id" required>
+      <option value="">Select…</option>
+      {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Block.TargetCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
+    </select>
+  </label>
+
+  <label>Source calendars (busy time read from these — Cmd/Ctrl-click to multi-select)
+    <select name="source_calendar_ids" multiple size="6" required>
+      {{range .Calendars}}
+        <option value="{{.ID}}" {{if index $.SourceSet .ID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>
+      {{end}}
+    </select>
+  </label>
+
+  <fieldset>
+    <legend>Working hours</legend>
+    <label>Time zone (IANA) <input type="text" name="wh_tz" value="{{.WH.TimeZone}}" placeholder="America/Chicago" required></label>
+    {{range $day := .Days}}
+      <label>{{$day.Label}} (HH:MM-HH:MM, comma separated)
+        <input type="text" name="wh_{{$day.Key}}" value="{{join (index $.WH.Days $day.Key) ","}}" placeholder="09:00-12:00,13:00-17:00">
+      </label>
+    {{end}}
+  </fieldset>
+
+  <label>Horizon (days) <input type="number" min="1" max="180" name="horizon_days" value="{{.Block.HorizonDays}}"></label>
+  <label>Min block (minutes) <input type="number" min="5" max="480" name="min_block_minutes" value="{{.Block.MinBlockMinutes}}"></label>
+  <label>Merge gap (minutes) <input type="number" min="0" max="240" name="merge_gap_minutes" value="{{.Block.MergeGapMinutes}}"></label>
+  <label>Block title <input type="text" name="title_template" value="{{.Block.TitleTemplate}}" placeholder="Focus"></label>
+
+  <label class="checkbox"><input type="checkbox" name="enabled" {{if .Block.Enabled}}checked{{end}}> Enabled</label>
+
+  <div class="row">
+    <button type="submit">Save</button>
+    <a href="/blocks" class="button secondary">Cancel</a>
+  </div>
+</form>
+{{end}}

@@ -1,0 +1,27 @@
+{{define "body"}}
+<div class="row">
+<h1>Smart blocks</h1>
+<a href="/blocks/new" class="button">+ New smart block</a>
+</div>
+{{if .Blocks}}
+<table>
+  <thead><tr><th>Name</th><th>Target</th><th>Sources</th><th>Enabled</th><th></th></tr></thead>
+  <tbody>
+  {{range .Blocks}}
+    <tr>
+      <td><a href="/blocks/{{.Block.ID}}">{{.Block.Name}}</a></td>
+      <td>{{.TargetLabel}}</td>
+      <td>{{.SourcesLabel}}</td>
+      <td>{{if .Block.Enabled}}yes{{else}}no{{end}}</td>
+      <td class="actions">
+        <form method="post" action="/blocks/{{.Block.ID}}/recompute"><button type="submit">Recompute</button></form>
+        <form method="post" action="/blocks/{{.Block.ID}}/delete" onsubmit="return confirm('Delete?')"><button type="submit" class="danger">Delete</button></form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No smart blocks yet.</p>
+{{end}}
+{{end}}

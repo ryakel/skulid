@@ -1,0 +1,35 @@
+{{define "body"}}
+<div class="row">
+<h1>Accounts</h1>
+<form method="post" action="/accounts/connect"><button type="submit">+ Connect Google account</button></form>
+</div>
+{{if .Accounts}}
+<table>
+  <thead><tr><th>Email</th><th>Calendars</th><th>Connected</th><th></th></tr></thead>
+  <tbody>
+  {{range .Accounts}}
+    <tr>
+      <td>{{.Email}}</td>
+      <td>{{(index $.CalendarsByAccount .ID) | len}}</td>
+      <td>{{fmtTime .CreatedAt}}</td>
+      <td class="actions">
+        <form method="post" action="/accounts/{{.ID}}/refresh"><button type="submit">Refresh calendars</button></form>
+        <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Disconnect {{.Email}}?')"><button type="submit" class="danger">Disconnect</button></form>
+      </td>
+    </tr>
+    {{with index $.CalendarsByAccount .ID}}
+    <tr><td colspan="4" class="nested">
+      <ul class="calendars">
+      {{range .}}
+        <li><span class="dot" style="background:{{.Color}}"></span><strong>{{.Summary}}</strong> <span class="muted">{{.TimeZone}} · {{.GoogleCalendarID}}</span></li>
+      {{end}}
+      </ul>
+    </td></tr>
+    {{end}}
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No accounts connected yet.</p>
+{{end}}
+{{end}}

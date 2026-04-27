@@ -1,0 +1,41 @@
+{{define "body"}}
+<h1>Dashboard</h1>
+<section class="grid">
+  <div class="card">
+    <h2>{{.Counts.Accounts}}</h2>
+    <p>Connected accounts</p>
+    <a href="/accounts">Manage</a>
+  </div>
+  <div class="card">
+    <h2>{{.Counts.Rules}}</h2>
+    <p>Sync rules</p>
+    <a href="/rules">Manage</a>
+  </div>
+  <div class="card">
+    <h2>{{.Counts.Blocks}}</h2>
+    <p>Smart blocks</p>
+    <a href="/blocks">Manage</a>
+  </div>
+</section>
+
+<h2>Recent activity</h2>
+{{if .Recent}}
+<table>
+  <thead><tr><th>When</th><th>Kind</th><th>Action</th><th>Source</th><th>Target</th><th>Message</th></tr></thead>
+  <tbody>
+  {{range .Recent}}
+    <tr>
+      <td>{{fmtTime .TS}}</td>
+      <td>{{.Kind}}</td>
+      <td>{{.Action}}</td>
+      <td><code>{{.SourceEventID}}</code></td>
+      <td><code>{{.TargetEventID}}</code></td>
+      <td>{{.Message}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">Nothing has happened yet. Connect an account to get started.</p>
+{{end}}
+{{end}}

@@ -1,0 +1,31 @@
+{{define "body"}}
+<div class="row">
+<h1>Sync rules</h1>
+<a href="/rules/new" class="button">+ New rule</a>
+</div>
+{{if .Rules}}
+<table>
+  <thead><tr><th>Name</th><th>Source</th><th>Target</th><th>Direction</th><th>Enabled</th><th></th></tr></thead>
+  <tbody>
+  {{range .Rules}}
+    <tr>
+      <td><a href="/rules/{{.Rule.ID}}">{{.Rule.Name}}</a></td>
+      <td>{{.SourceLabel}}</td>
+      <td>{{.TargetLabel}}</td>
+      <td>{{.Rule.Direction}}</td>
+      <td>{{if .Rule.Enabled}}yes{{else}}no{{end}}</td>
+      <td class="actions">
+        <form method="post" action="/rules/{{.Rule.ID}}/sync"><button type="submit">Sync now</button></form>
+        {{if and (gt .Rule.BackfillDays 0) (not .Rule.BackfillDone)}}
+          <form method="post" action="/rules/{{.Rule.ID}}/backfill"><button type="submit">Backfill {{.Rule.BackfillDays}}d</button></form>
+        {{end}}
+        <form method="post" action="/rules/{{.Rule.ID}}/delete" onsubmit="return confirm('Delete rule?')"><button type="submit" class="danger">Delete</button></form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No rules yet. Create one to start mirroring events between calendars.</p>
+{{end}}
+{{end}}

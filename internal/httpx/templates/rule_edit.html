@@ -1,0 +1,84 @@
+{{define "body"}}
+<h1>{{if .Rule.ID}}Edit rule{{else}}New rule{{end}}</h1>
+<form method="post" action="{{if .Rule.ID}}/rules/{{.Rule.ID}}{{else}}/rules{{end}}" class="stack">
+  <label>Name <input type="text" name="name" value="{{.Rule.Name}}" required></label>
+  <label>Source calendar
+    <select name="source_calendar_id" required>
+      <option value="">Select…</option>
+      {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Rule.SourceCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
+    </select>
+  </label>
+  <label>Target calendar
+    <select name="target_calendar_id" required>
+      <option value="">Select…</option>
+      {{range .Calendars}}<option value="{{.ID}}" {{if eq .ID $.Rule.TargetCalendarID}}selected{{end}}>{{.AccountEmail}} · {{.Summary}}</option>{{end}}
+    </select>
+  </label>
+  <label>Direction
+    <select name="direction">
+      <option value="one_way" {{if eq .Rule.Direction "one_way"}}selected{{end}}>one way (source → target)</option>
+      <option value="bidirectional" {{if eq .Rule.Direction "bidirectional"}}selected{{end}}>bidirectional</option>
+    </select>
+  </label>
+  <label>Primary side (used to break ties on bidirectional conflicts)
+    <select name="primary_side">
+      <option value="source" {{if eq .Rule.PrimarySide "source"}}selected{{end}}>source</option>
+      <option value="target" {{if eq .Rule.PrimarySide "target"}}selected{{end}}>target</option>
+    </select>
+  </label>
+
+  <fieldset>
+    <legend>Filter</legend>
+    <label>Title regex <input type="text" name="filter_title_regex" value="{{.Filter.TitleRegex}}" placeholder="^Standup"></label>
+    <label>Color IDs (comma separated)
+      <input type="text" name="filter_color_ids" value="{{join .Filter.ColorIDs ","}}" placeholder="3,4">
+    </label>
+    <label>Attendee email contains any (comma separated)
+      <input type="text" name="filter_attendees" value="{{join .Filter.AttendeeAny ","}}" placeholder="boss@x.com,client@y.com">
+    </label>
+    <label>Free/busy
+      <select name="filter_free_busy">
+        <option value="" {{if eq .Filter.FreeBusy ""}}selected{{end}}>any</option>
+        <option value="busy" {{if eq .Filter.FreeBusy "busy"}}selected{{end}}>busy only</option>
+        <option value="free" {{if eq .Filter.FreeBusy "free"}}selected{{end}}>free only</option>
+      </select>
+    </label>
+    <label>All-day
+      <select name="filter_all_day">
+        <option value="" {{if eq .Filter.AllDay ""}}selected{{end}}>include both</option>
+        <option value="only" {{if eq .Filter.AllDay "only"}}selected{{end}}>all-day only</option>
+        <option value="exclude" {{if eq .Filter.AllDay "exclude"}}selected{{end}}>exclude all-day</option>
+      </select>
+    </label>
+    <label>Start hour ≥ <input type="number" min="0" max="23" name="filter_start_hour" value="{{.Filter.StartHour}}"></label>
+    <label>Start hour &lt; <input type="number" min="0" max="23" name="filter_end_hour" value="{{.Filter.EndHour}}"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Transform</legend>
+    <label>Title template (use {title} and {location}) <input type="text" name="transform_title" value="{{.Transform.TitleTemplate}}" placeholder="Busy"></label>
+    <label class="checkbox"><input type="checkbox" name="transform_mark_busy" {{if .Transform.MarkBusy}}checked{{end}}> Force "busy" transparency</label>
+    <label class="checkbox"><input type="checkbox" name="transform_strip_attendees" {{if .Transform.StripAttendees}}checked{{end}}> Strip attendees</label>
+    <label class="checkbox"><input type="checkbox" name="transform_strip_description" {{if .Transform.StripDescription}}checked{{end}}> Strip description</label>
+    <label>Visibility
+      <select name="transform_visibility">
+        <option value="" {{if eq .Transform.Visibility ""}}selected{{end}}>(unchanged)</option>
+        <option value="default" {{if eq .Transform.Visibility "default"}}selected{{end}}>default</option>
+        <option value="public" {{if eq .Transform.Visibility "public"}}selected{{end}}>public</option>
+        <option value="private" {{if eq .Transform.Visibility "private"}}selected{{end}}>private</option>
+      </select>
+    </label>
+  </fieldset>
+
+  <label>Backfill last N days when saved (0 = forward-only)
+    <input type="number" min="0" max="365" name="backfill_days" value="{{.Rule.BackfillDays}}">
+  </label>
+
+  <label class="checkbox"><input type="checkbox" name="enabled" {{if .Rule.Enabled}}checked{{end}}> Enabled</label>
+
+  <div class="row">
+    <button type="submit">Save</button>
+    <a href="/rules" class="button secondary">Cancel</a>
+  </div>
+</form>
+{{end}}

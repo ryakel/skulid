@@ -1,0 +1,12 @@
+{{define "body"}}
+<h1>Settings</h1>
+<dl class="settings">
+  <dt>Owner email</dt><dd>{{.OwnerEmail}}</dd>
+  <dt>External URL</dt><dd>{{.ExternalURL}}</dd>
+  <dt>Schema version</dt><dd>1</dd>
+</dl>
+
+<h2>Webhooks</h2>
+<p class="muted">Re-register Google push channels for every calendar (use this if your tunnel URL changed).</p>
+<form method="post" action="/settings/rewatch"><button type="submit">Re-register all webhooks</button></form>
+{{end}}

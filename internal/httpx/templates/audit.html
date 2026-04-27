@@ -1,0 +1,24 @@
+{{define "body"}}
+<h1>Audit log</h1>
+{{if .Entries}}
+<table>
+  <thead><tr><th>When</th><th>Kind</th><th>Rule</th><th>Block</th><th>Action</th><th>Source</th><th>Target</th><th>Message</th></tr></thead>
+  <tbody>
+  {{range .Entries}}
+    <tr>
+      <td>{{fmtTime .TS}}</td>
+      <td>{{.Kind}}</td>
+      <td>{{deref .RuleID}}</td>
+      <td>{{deref .SmartBlockID}}</td>
+      <td>{{.Action}}</td>
+      <td><code>{{.SourceEventID}}</code></td>
+      <td><code>{{.TargetEventID}}</code></td>
+      <td>{{.Message}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No audit entries yet.</p>
+{{end}}
+{{end}}
