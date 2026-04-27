@@ -159,6 +159,11 @@ func (m *Manager) debounceSmartBlock(blockID int64) {
 	})
 }
 
+// RecomputeBlock runs the smart-block engine synchronously against one block.
+func (m *Manager) RecomputeBlock(ctx context.Context, blockID int64) error {
+	return m.smartEngine.Recompute(ctx, blockID)
+}
+
 // RecomputeAllSmartBlocks runs every enabled smart block now (used at startup
 // and from the manual buttons in the UI).
 func (m *Manager) RecomputeAllSmartBlocks(ctx context.Context) {
