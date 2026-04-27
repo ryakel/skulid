@@ -131,6 +131,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/settings/hours/{id}", s.handleHoursSave)
 		r.Get("/settings/buffers", s.handleBuffersPage)
 		r.Post("/settings/buffers", s.handleBuffersSave)
+		r.Post("/settings/buffers/recompute", s.handleBuffersRecompute)
 
 		if s.Agent != nil {
 			r.Get("/assistant", s.handleAssistantList)

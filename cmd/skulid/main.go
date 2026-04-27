@@ -74,6 +74,7 @@ func run(log *slog.Logger) error {
 	tasks := db.NewTaskRepo(pool)
 	habits := db.NewHabitRepo(pool)
 	occurrences := db.NewHabitOccurrenceRepo(pool)
+	decomp := db.NewDecompressionRepo(pool)
 	aiConversations := db.NewAIConversationRepo(pool)
 	aiMessages := db.NewAIMessageRepo(pool)
 	aiPending := db.NewAIPendingActionRepo(pool)
@@ -94,10 +95,12 @@ func run(log *slog.Logger) error {
 	engine := syncengine.NewEngine(rules, accounts, calendars, links, audit, clientFor, log)
 	smartEngine := syncengine.NewSmartBlockEngine(blocks, managed, calendars, audit, clientFor, log)
 	scheduler := syncengine.NewScheduler(tasks, habits, occurrences, accounts, calendars, settings, audit, clientFor, log)
+	decompEngine := syncengine.NewDecompressionEngine(calendars, accounts, settings, decomp, audit, clientFor, log)
 
 	mgr := worker.NewManager(pool, accounts, calendars, tokens, rules, blocks, links, audit,
 		clientFor, engine, smartEngine, cfg.ExternalURL, log)
 	mgr.SetAIConversationCleanup(aiConversations, 30*24*time.Hour)
+	mgr.SetDecompressionEngine(decompEngine)
 
 	var agent *ai.Agent
 	if cfg.AnthropicAPIKey != "" {

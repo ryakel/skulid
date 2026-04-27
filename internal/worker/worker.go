@@ -31,17 +31,18 @@ const (
 // Manager coordinates per-account work and the cross-cutting scheduler. Jobs
 // are fan-outs into per-account inboxes so a slow account never blocks others.
 type Manager struct {
-	pool       *pgxpool.Pool
-	accounts   *db.AccountRepo
-	calendars  *db.CalendarRepo
-	tokens     *db.SyncTokenRepo
-	rules      *db.SyncRuleRepo
-	blocks     *db.SmartBlockRepo
-	links      *db.EventLinkRepo
-	audit      *db.AuditRepo
-	clientFor  syncengine.ClientFor
-	engine     *syncengine.Engine
+	pool        *pgxpool.Pool
+	accounts    *db.AccountRepo
+	calendars   *db.CalendarRepo
+	tokens      *db.SyncTokenRepo
+	rules       *db.SyncRuleRepo
+	blocks      *db.SmartBlockRepo
+	links       *db.EventLinkRepo
+	audit       *db.AuditRepo
+	clientFor   syncengine.ClientFor
+	engine      *syncengine.Engine
 	smartEngine *syncengine.SmartBlockEngine
+	decompEngine *syncengine.DecompressionEngine // optional
 
 	externalURL string
 	log         *slog.Logger
@@ -53,9 +54,13 @@ type Manager struct {
 	mu      stdsync.Mutex
 	workers map[int64]*accountWorker
 
-	// Smart block recompute is debounced.
+	// Smart block recompute is debounced per smart_block.
 	debounceMu stdsync.Mutex
 	debounce   map[int64]*time.Timer
+
+	// Decompression recompute is debounced per calendar.
+	decompDebounceMu stdsync.Mutex
+	decompDebounce   map[int64]*time.Timer
 
 	stop chan struct{}
 }
@@ -84,9 +89,54 @@ func NewManager(pool *pgxpool.Pool,
 		smartEngine: smartEngine,
 		externalURL: externalURL,
 		log:         log,
-		workers:     map[int64]*accountWorker{},
-		debounce:    map[int64]*time.Timer{},
-		stop:        make(chan struct{}),
+		workers:        map[int64]*accountWorker{},
+		debounce:       map[int64]*time.Timer{},
+		decompDebounce: map[int64]*time.Timer{},
+		stop:           make(chan struct{}),
+	}
+}
+
+// SetDecompressionEngine wires in the decompression engine. Optional — when
+// not set, no decompress events are written and no decompression cleanup runs.
+func (m *Manager) SetDecompressionEngine(e *syncengine.DecompressionEngine) {
+	m.decompEngine = e
+}
+
+// EnqueueDecompressionForCalendar debounces (15s) and recomputes decompress
+// events for the given calendar.
+func (m *Manager) EnqueueDecompressionForCalendar(calendarID int64) {
+	if m.decompEngine == nil {
+		return
+	}
+	m.decompDebounceMu.Lock()
+	defer m.decompDebounceMu.Unlock()
+	if t, ok := m.decompDebounce[calendarID]; ok {
+		t.Stop()
+	}
+	m.decompDebounce[calendarID] = time.AfterFunc(15*time.Second, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := m.decompEngine.Recompute(ctx, calendarID); err != nil {
+			m.log.Error("decompression recompute failed", "calendar_id", calendarID, "err", err)
+		}
+	})
+}
+
+// RecomputeAllDecompression runs the decompression engine across every
+// connected calendar — used by the manual button on Settings → Buffers.
+func (m *Manager) RecomputeAllDecompression(ctx context.Context) {
+	if m.decompEngine == nil {
+		return
+	}
+	cals, err := m.calendars.ListAll(ctx)
+	if err != nil {
+		m.log.Error("list calendars failed", "err", err)
+		return
+	}
+	for _, c := range cals {
+		if err := m.decompEngine.Recompute(ctx, c.ID); err != nil {
+			m.log.Warn("decompression recompute failed", "calendar_id", c.ID, "err", err)
+		}
 	}
 }
 
@@ -417,5 +467,7 @@ func (w *accountWorker) syncCalendar(ctx context.Context, cli *calendar.Client, 
 	_ = w.mgr.calendars.MarkSynced(ctx, cal.ID, time.Now())
 	// Smart-block changes might be triggered by any event change on a source calendar.
 	w.mgr.EnqueueSmartBlocksForCalendar(ctx, cal.ID)
+	// Decompress events trail real meetings; refresh after every sync of this calendar.
+	w.mgr.EnqueueDecompressionForCalendar(cal.ID)
 	return nil
 }
