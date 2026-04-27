@@ -1,66 +1,83 @@
 # calm-axolotl
 
-Self-hosted, single-user alternative to Reclaim.ai for Google Calendar.
-You bring your own Google OAuth credentials and your own public HTTPS endpoint;
-calm-axolotl runs as one Go binary plus a Postgres database in Docker.
+> Self-hosted, single-user Google Calendar sync — a Reclaim.ai alternative
+> you can run on a homelab box.
 
-Two features:
+calm-axolotl is one Go binary plus a Postgres database, packaged as a
+Docker Compose stack. You bring your own Google OAuth credentials and
+your own public HTTPS endpoint; calm-axolotl mirrors events between
+your calendars on rules you define and maintains automatic
+focus/availability blocks based on busy time elsewhere. An optional
+Claude-powered chat lets you talk to your calendars.
 
-1. **Sync rules** — mirror events between your calendars with optional
-   filtering and transformation. Works one-way or bidirectionally.
-2. **Smart blocks** — automatically maintain "focus"/"busy" blocks on a
-   target calendar based on busy time elsewhere, respecting per-block
-   working hours in any IANA timezone.
+## Features
+
+- **Sync rules** — mirror events between calendars one-way or
+  bidirectionally, with optional filtering and transformation.
+- **Smart blocks** — auto-maintain focus/busy blocks on a target
+  calendar based on busy time on others, respecting per-block working
+  hours in any IANA timezone.
+- **Webhook + polling** — Google push channels for near-real-time sync
+  with a 5-minute polling fallback.
+- **AI assistant** *(optional)* — chat with Claude to manage your
+  calendars; every write requires a one-click confirmation.
+- **Token sealing** — refresh tokens are AES-256-GCM encrypted at rest.
+- **Single-user TOFU** — first Google login claims the instance; no
+  one else can log in afterward.
 
 ## Quick start
 
-1. Create an OAuth 2.0 **Web application** client in
-   [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-   Add `https://YOUR.HOST/auth/google/callback` as an authorized redirect URI.
-   Enable the **Google Calendar API** for the project.
-2. `cp .env.example .env` and fill it in. Generate the secrets:
-   ```
-   openssl rand -base64 48   # SESSION_SECRET
-   openssl rand -base64 32   # ENCRYPTION_KEY
-   ```
-3. Make `EXTERNAL_URL` reachable over HTTPS. A Cloudflare tunnel or
-   Tailscale Funnel is the easiest. (Plain `http://localhost` works for
-   browsing but Google push notifications require HTTPS.)
-4. `docker compose up -d --build`.
-5. Open `EXTERNAL_URL` in a browser. The first Google account to sign in
-   becomes the permanent owner of this instance (TOFU). Connect any
-   additional accounts from **Accounts → Connect Google account**.
-
-## Architecture
-
-| Concern               | Implementation                                                  |
-| --------------------- | --------------------------------------------------------------- |
-| HTTP                  | `chi` + `html/template` (HTMX/Alpine sprinkled in)              |
-| Persistence           | Postgres 16 via `pgx/v5`; migrations embedded with `goose`      |
-| Token storage         | AES-256-GCM sealed (per-row nonce); key from `ENCRYPTION_KEY`   |
-| Auth                  | Google OAuth + TOFU owner claim + HMAC-SHA256 session cookies   |
-| Calendar API          | Google Calendar v3 client with sync tokens + freebusy           |
-| Change notification   | Google push channels with HMAC token; 5-minute polling fallback |
-| Loop protection       | `extendedProperties.private.calmAxolotlManaged` + `event_link`  |
-| Concurrency           | One goroutine worker per account; debounced smart-block recompute |
-
-## Development
-
-```
-go build ./...
-go vet ./...
+```bash
+git clone https://github.com/ryakel/skulid.git
+cd skulid
+cp .env.example .env
+# fill in EXTERNAL_URL, Google OAuth, SESSION_SECRET, ENCRYPTION_KEY
+docker compose up -d --build
 ```
 
-Run a local Postgres and export `.env` then:
-```
-go run ./cmd/calmaxolotl
-```
+Open `EXTERNAL_URL` in a browser, sign in with Google, you own the
+instance. Full walkthrough in
+[Getting Started](https://github.com/ryakel/skulid/wiki/Getting-Started).
 
-## Backup
+## Documentation
 
-Everything important lives in Postgres. Snapshot the `db_data` volume (or
-`pg_dump`) and keep your `ENCRYPTION_KEY` somewhere safe — the database
-alone is useless without it.
+The detailed docs live in the [GitHub Wiki](https://github.com/ryakel/skulid/wiki),
+and are version-controlled in [`wiki/`](./wiki) for review alongside
+code changes (synced to the Wiki by `.github/workflows/wiki-sync.yml`
+on push to `main`).
+
+| Page                                                                         | What's in it                                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Home](https://github.com/ryakel/skulid/wiki/Home)                           | Index and orientation                                              |
+| [Getting Started](https://github.com/ryakel/skulid/wiki/Getting-Started)     | Zero-to-running walkthrough                                        |
+| [Architecture](https://github.com/ryakel/skulid/wiki/Architecture)           | Stack, data model, change flow                                     |
+| [Sync Rules](https://github.com/ryakel/skulid/wiki/Sync-Rules)               | Filters, transforms, bidirectional, backfill, examples             |
+| [Smart Blocks](https://github.com/ryakel/skulid/wiki/Smart-Blocks)           | Working hours, DST, recompute, examples                            |
+| [AI Assistant](https://github.com/ryakel/skulid/wiki/AI-Assistant)           | Tools, confirmation flow, persistence                              |
+| [Configuration](https://github.com/ryakel/skulid/wiki/Configuration)         | Every supported environment variable                               |
+| [Operations](https://github.com/ryakel/skulid/wiki/Operations)               | Backups, watch renewal, audit log, troubleshooting                 |
+| [Security Model](https://github.com/ryakel/skulid/wiki/Security-Model)       | Threat model and what we do/don't protect against                  |
+| [Development](https://github.com/ryakel/skulid/wiki/Development)             | Local setup, conventions, adding features                          |
+
+## Status
+
+Beta. Schema is at v1 with a single migration; breaking changes will
+get a numbered migration. The token sealing key is not auto-rotated —
+back up your `ENCRYPTION_KEY` somewhere offline.
+
+## Stack
+
+Go 1.25 · chi · pgx + Postgres 16 · goose · Google Calendar API v3 ·
+HTMX + Alpine.js · distroless. See
+[Architecture](https://github.com/ryakel/skulid/wiki/Architecture)
+for the full map.
+
+## Contributing
+
+Open an issue first for anything beyond a small fix. The codebase
+prefers explicit code over abstraction — see
+[Development](https://github.com/ryakel/skulid/wiki/Development) for
+conventions.
 
 ## License
 
