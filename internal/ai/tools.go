@@ -24,16 +24,25 @@ type Toolbox struct {
 	accounts       *db.AccountRepo
 	calendars      *db.CalendarRepo
 	audit          *db.AuditRepo
+	tasks          *db.TaskRepo
+	habits         *db.HabitRepo
+	occurrences    *db.HabitOccurrenceRepo
+	scheduler      *syncengine.Scheduler
 	clientFor      syncengine.ClientFor
 	conversationID int64
 }
 
 func NewToolbox(accounts *db.AccountRepo, calendars *db.CalendarRepo, audit *db.AuditRepo,
-	clientFor syncengine.ClientFor, conversationID int64) *Toolbox {
+	tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
+	scheduler *syncengine.Scheduler, clientFor syncengine.ClientFor, conversationID int64) *Toolbox {
 	return &Toolbox{
 		accounts:       accounts,
 		calendars:      calendars,
 		audit:          audit,
+		tasks:          tasks,
+		habits:         habits,
+		occurrences:    occurrences,
+		scheduler:      scheduler,
 		clientFor:      clientFor,
 		conversationID: conversationID,
 	}
@@ -42,10 +51,17 @@ func NewToolbox(accounts *db.AccountRepo, calendars *db.CalendarRepo, audit *db.
 // writeTools is the set of tools that must NOT auto-execute. The agent loop
 // stages these as ai_pending_action rows and waits for user confirmation.
 var writeTools = map[string]bool{
-	"create_event": true,
-	"update_event": true,
-	"delete_event": true,
-	"move_event":   true,
+	"create_event":   true,
+	"update_event":   true,
+	"delete_event":   true,
+	"move_event":     true,
+	"create_task":    true,
+	"update_task":    true,
+	"complete_task":  true,
+	"delete_task":    true,
+	"create_habit":   true,
+	"update_habit":   true,
+	"delete_habit":   true,
 }
 
 // IsWrite reports whether the named tool requires confirmation.
@@ -172,6 +188,134 @@ func Defs() []ToolDef {
 				"additionalProperties":false
 			}`),
 		},
+		// ----- Tasks -----
+		{
+			Name:        "list_tasks",
+			Description: "List tasks the daemon is tracking. Returns id, title, priority, duration, due, status, scheduled window, target calendar.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{
+					"include_completed":{"type":"boolean","description":"include completed/cancelled tasks (default false)"}
+				},
+				"additionalProperties":false
+			}`),
+		},
+		{
+			Name:        "create_task",
+			Description: "Stage creation of a task. The scheduler will place it in the next available working-hours slot. NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{
+					"title":{"type":"string"},
+					"target_calendar_id":{"type":"integer"},
+					"duration_minutes":{"type":"integer","minimum":5,"description":"defaults to 30"},
+					"priority":{"type":"string","enum":["critical","high","medium","low"],"description":"defaults to medium"},
+					"due_at":{"type":"string","description":"optional RFC3339 deadline"},
+					"category_id":{"type":"integer","description":"optional category to pin"},
+					"notes":{"type":"string"}
+				},
+				"required":["title","target_calendar_id"],
+				"additionalProperties":false
+			}`),
+		},
+		{
+			Name:        "update_task",
+			Description: "Stage edits to a task. Only the supplied fields are changed. NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{
+					"task_id":{"type":"integer"},
+					"title":{"type":"string"},
+					"target_calendar_id":{"type":"integer"},
+					"duration_minutes":{"type":"integer","minimum":5},
+					"priority":{"type":"string","enum":["critical","high","medium","low"]},
+					"due_at":{"type":"string","description":"RFC3339; pass empty string to clear"},
+					"category_id":{"type":"integer"},
+					"notes":{"type":"string"},
+					"status":{"type":"string","enum":["pending","scheduled","completed","cancelled"]}
+				},
+				"required":["task_id"],
+				"additionalProperties":false
+			}`),
+		},
+		{
+			Name:        "complete_task",
+			Description: "Stage marking a task as completed. NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{"task_id":{"type":"integer"}},
+				"required":["task_id"],
+				"additionalProperties":false
+			}`),
+		},
+		{
+			Name:        "delete_task",
+			Description: "Stage deletion of a task (and its scheduled calendar event if any). NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{"task_id":{"type":"integer"}},
+				"required":["task_id"],
+				"additionalProperties":false
+			}`),
+		},
+		// ----- Habits -----
+		{
+			Name:        "list_habits",
+			Description: "List recurring habit blocks the daemon is maintaining (e.g. Lunch, Decompress).",
+			InputSchema: mk(`{"type":"object","properties":{},"additionalProperties":false}`),
+		},
+		{
+			Name:        "create_habit",
+			Description: "Stage creation of a recurring habit. The scheduler will place an occurrence on each matching weekday near ideal_time within ±flex_minutes. NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{
+					"title":{"type":"string"},
+					"target_calendar_id":{"type":"integer"},
+					"duration_minutes":{"type":"integer","minimum":5,"description":"defaults to 60"},
+					"ideal_time":{"type":"string","description":"HH:MM in the target account's hours timezone"},
+					"flex_minutes":{"type":"integer","minimum":0,"description":"max drift from ideal_time, default 90"},
+					"days_of_week":{"type":"array","items":{"type":"string","enum":["mon","tue","wed","thu","fri","sat","sun"]}},
+					"hours_kind":{"type":"string","enum":["working","personal","meeting"],"description":"which account hours window; default 'personal'"},
+					"horizon_days":{"type":"integer","minimum":1,"description":"days into the future to maintain occurrences; default 14"},
+					"category_id":{"type":"integer"}
+				},
+				"required":["title","target_calendar_id","ideal_time","days_of_week"],
+				"additionalProperties":false
+			}`),
+		},
+		{
+			Name:        "update_habit",
+			Description: "Stage edits to a habit. Only the supplied fields are changed. NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{
+					"habit_id":{"type":"integer"},
+					"title":{"type":"string"},
+					"target_calendar_id":{"type":"integer"},
+					"duration_minutes":{"type":"integer","minimum":5},
+					"ideal_time":{"type":"string"},
+					"flex_minutes":{"type":"integer","minimum":0},
+					"days_of_week":{"type":"array","items":{"type":"string","enum":["mon","tue","wed","thu","fri","sat","sun"]}},
+					"hours_kind":{"type":"string","enum":["working","personal","meeting"]},
+					"horizon_days":{"type":"integer","minimum":1},
+					"category_id":{"type":"integer"},
+					"enabled":{"type":"boolean"}
+				},
+				"required":["habit_id"],
+				"additionalProperties":false
+			}`),
+		},
+		{
+			Name:        "delete_habit",
+			Description: "Stage deletion of a habit (and every Google calendar event it has placed). NOT executed until the user confirms.",
+			InputSchema: mk(`{
+				"type":"object",
+				"properties":{"habit_id":{"type":"integer"}},
+				"required":["habit_id"],
+				"additionalProperties":false
+			}`),
+		},
 	}
 }
 
@@ -195,6 +339,24 @@ func (t *Toolbox) Execute(ctx context.Context, name string, input json.RawMessag
 		return t.deleteEvent(ctx, input)
 	case "move_event":
 		return t.moveEvent(ctx, input)
+	case "list_tasks":
+		return t.listTasks(ctx, input)
+	case "create_task":
+		return t.createTask(ctx, input)
+	case "update_task":
+		return t.updateTask(ctx, input)
+	case "complete_task":
+		return t.completeTask(ctx, input)
+	case "delete_task":
+		return t.deleteTask(ctx, input)
+	case "list_habits":
+		return t.listHabits(ctx)
+	case "create_habit":
+		return t.createHabit(ctx, input)
+	case "update_habit":
+		return t.updateHabit(ctx, input)
+	case "delete_habit":
+		return t.deleteHabit(ctx, input)
 	default:
 		return "", fmt.Errorf("unknown tool %q", name)
 	}
@@ -220,8 +382,43 @@ func Describe(name string, input json.RawMessage) string {
 		var p moveEventInput
 		_ = json.Unmarshal(input, &p)
 		return fmt.Sprintf("Move event %s on calendar #%d to %s–%s", p.EventID, p.CalendarID, p.NewStart, p.NewEnd)
+	case "create_task":
+		var p createTaskInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Create task %q (%dm, priority=%s) on calendar #%d", p.Title, p.DurationMinutes, strOrDefault(p.Priority, "medium"), p.TargetCalendarID)
+	case "update_task":
+		var p updateTaskInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Update task #%d", p.TaskID)
+	case "complete_task":
+		var p taskIDOnlyInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Mark task #%d as completed", p.TaskID)
+	case "delete_task":
+		var p taskIDOnlyInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Delete task #%d (and its scheduled calendar event)", p.TaskID)
+	case "create_habit":
+		var p createHabitInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Create habit %q (%dm at ~%s on %s)", p.Title, p.DurationMinutes, p.IdealTime, strings.Join(p.DaysOfWeek, ","))
+	case "update_habit":
+		var p updateHabitInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Update habit #%d", p.HabitID)
+	case "delete_habit":
+		var p habitIDOnlyInput
+		_ = json.Unmarshal(input, &p)
+		return fmt.Sprintf("Delete habit #%d (and every occurrence on Google)", p.HabitID)
 	}
 	return name
+}
+
+func strOrDefault(v, def string) string {
+	if strings.TrimSpace(v) == "" {
+		return def
+	}
+	return v
 }
 
 // ---------------------------------------------------------------------------

@@ -7,8 +7,15 @@ import (
 )
 
 func TestIsWriteCoversTheRightSet(t *testing.T) {
-	writes := []string{"create_event", "update_event", "delete_event", "move_event"}
-	reads := []string{"list_calendars", "list_events", "find_event", "find_free_time"}
+	writes := []string{
+		"create_event", "update_event", "delete_event", "move_event",
+		"create_task", "update_task", "complete_task", "delete_task",
+		"create_habit", "update_habit", "delete_habit",
+	}
+	reads := []string{
+		"list_calendars", "list_events", "find_event", "find_free_time",
+		"list_tasks", "list_habits",
+	}
 
 	for _, name := range writes {
 		if !IsWrite(name) {
@@ -27,13 +34,17 @@ func TestIsWriteCoversTheRightSet(t *testing.T) {
 
 func TestDefsAreValidJSONAndCoverAllTools(t *testing.T) {
 	defs := Defs()
-	if len(defs) < 8 {
-		t.Fatalf("expected at least 8 tool defs, got %d", len(defs))
+	if len(defs) < 17 {
+		t.Fatalf("expected at least 17 tool defs, got %d", len(defs))
 	}
 	want := map[string]bool{
 		"list_calendars": false, "list_events": false, "find_event": false,
 		"find_free_time": false, "create_event": false, "update_event": false,
 		"delete_event": false, "move_event": false,
+		"list_tasks": false, "create_task": false, "update_task": false,
+		"complete_task": false, "delete_task": false,
+		"list_habits": false, "create_habit": false, "update_habit": false,
+		"delete_habit": false,
 	}
 	for _, d := range defs {
 		if d.Name == "" {
@@ -67,11 +78,42 @@ func TestDescribeProducesNonEmptyOutputForKnownTools(t *testing.T) {
 		{"update_event", `{"calendar_id":1,"event_id":"abc"}`},
 		{"delete_event", `{"calendar_id":1,"event_id":"abc"}`},
 		{"move_event", `{"calendar_id":1,"event_id":"abc","new_start":"2026-04-27T11:00:00Z","new_end":"2026-04-27T12:00:00Z"}`},
+		{"create_task", `{"title":"Write report","target_calendar_id":1,"duration_minutes":60}`},
+		{"update_task", `{"task_id":42}`},
+		{"complete_task", `{"task_id":42}`},
+		{"delete_task", `{"task_id":42}`},
+		{"create_habit", `{"title":"Lunch","target_calendar_id":1,"ideal_time":"12:00","days_of_week":["mon","tue"]}`},
+		{"update_habit", `{"habit_id":7}`},
+		{"delete_habit", `{"habit_id":7}`},
 	}
 	for _, tc := range cases {
 		got := Describe(tc.name, json.RawMessage(tc.input))
 		if got == "" || got == tc.name {
 			t.Errorf("Describe(%q): expected human-readable output, got %q", tc.name, got)
+		}
+	}
+}
+
+func TestCleanDows(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want []string
+	}{
+		{nil, []string{}},
+		{[]string{"mon", "tue"}, []string{"mon", "tue"}},
+		{[]string{"MON", " Tue ", "tue", "garbage"}, []string{"mon", "tue"}},
+		{[]string{"sun", "mon", "sun"}, []string{"sun", "mon"}},
+	}
+	for _, tc := range cases {
+		got := cleanDows(tc.in)
+		if len(got) != len(tc.want) {
+			t.Errorf("cleanDows(%v): got %v want %v", tc.in, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("cleanDows(%v)[%d]: got %q want %q", tc.in, i, got[i], tc.want[i])
+			}
 		}
 	}
 }

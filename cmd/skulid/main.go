@@ -104,7 +104,9 @@ func run(log *slog.Logger) error {
 		agent = ai.NewAgent(
 			ai.NewClient(cfg.AnthropicAPIKey, cfg.AnthropicModel),
 			aiConversations, aiMessages, aiPending,
-			accounts, calendars, audit, clientFor, log,
+			accounts, calendars, audit,
+			tasks, habits, occurrences, scheduler,
+			clientFor, log,
 		)
 		log.Info("ai assistant enabled", "model", cfg.AnthropicModel)
 	} else {

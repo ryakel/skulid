@@ -16,13 +16,17 @@ import (
 // Agent owns the conversation/turn lifecycle. It is safe to share across
 // requests; one Agent backs every conversation.
 type Agent struct {
-	client       *Client
+	client        *Client
 	conversations *db.AIConversationRepo
 	messages      *db.AIMessageRepo
 	pending       *db.AIPendingActionRepo
 	accounts      *db.AccountRepo
 	calendars     *db.CalendarRepo
 	audit         *db.AuditRepo
+	tasks         *db.TaskRepo
+	habits        *db.HabitRepo
+	occurrences   *db.HabitOccurrenceRepo
+	scheduler     *syncengine.Scheduler
 	clientFor     syncengine.ClientFor
 	log           *slog.Logger
 }
@@ -34,6 +38,10 @@ func NewAgent(client *Client,
 	accounts *db.AccountRepo,
 	calendars *db.CalendarRepo,
 	audit *db.AuditRepo,
+	tasks *db.TaskRepo,
+	habits *db.HabitRepo,
+	occurrences *db.HabitOccurrenceRepo,
+	scheduler *syncengine.Scheduler,
 	clientFor syncengine.ClientFor,
 	log *slog.Logger,
 ) *Agent {
@@ -45,6 +53,10 @@ func NewAgent(client *Client,
 		accounts:      accounts,
 		calendars:     calendars,
 		audit:         audit,
+		tasks:         tasks,
+		habits:        habits,
+		occurrences:   occurrences,
+		scheduler:     scheduler,
 		clientFor:     clientFor,
 		log:           log,
 	}
@@ -109,7 +121,7 @@ func (a *Agent) ResolvePendingAction(ctx context.Context, actionID int64, apply 
 
 	var resultJSON json.RawMessage
 	if apply {
-		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.clientFor, action.ConversationID)
+		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.tasks, a.habits, a.occurrences, a.scheduler, a.clientFor, action.ConversationID)
 		resultStr, err := tb.Execute(ctx, action.ToolName, action.ToolInput)
 		isError := err != nil
 		if err != nil {
@@ -217,7 +229,7 @@ func (a *Agent) advance(ctx context.Context, convID int64) error {
 			return nil
 		}
 
-		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.clientFor, convID)
+		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.tasks, a.habits, a.occurrences, a.scheduler, a.clientFor, convID)
 		var stagedAny bool
 		results := make([]ContentBlock, 0, len(toolUses))
 		for _, tu := range toolUses {

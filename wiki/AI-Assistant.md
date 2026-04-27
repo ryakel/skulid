@@ -40,15 +40,18 @@ send a message, skulid:
 
 ### Read-only (auto-execute)
 
-| Tool                | What it does                                                  |
-| ------------------- | ------------------------------------------------------------- |
+| Tool                | What it does                                                 |
+| ------------------- | ------------------------------------------------------------ |
 | `list_calendars`    | Lists every connected calendar (id, summary, account, tz)    |
 | `list_events`       | Lists events on a calendar within a time range               |
 | `find_event`        | Searches event summaries across all calendars                |
 | `find_free_time`    | Returns free windows for given calendars + duration          |
+| `list_tasks`        | Lists tracked tasks (priority, duration, due, scheduled slot)|
+| `list_habits`       | Lists recurring habits (Lunch, Decompress, etc.)             |
 
 ### Write (require confirmation)
 
+#### Events
 | Tool             | What it does                                                |
 | ---------------- | ----------------------------------------------------------- |
 | `create_event`   | Creates a new event on a calendar                           |
@@ -56,9 +59,25 @@ send a message, skulid:
 | `delete_event`   | Removes an event                                            |
 | `move_event`     | Convenience for changing only start+end                     |
 
+#### Tasks (the scheduler auto-places these in working hours)
+| Tool             | What it does                                                |
+| ---------------- | ----------------------------------------------------------- |
+| `create_task`    | Adds a task; the scheduler places it in the next free slot  |
+| `update_task`    | Edits any task field (title, due, priority, calendar, etc.) |
+| `complete_task`  | Marks a task as done                                        |
+| `delete_task`    | Removes the task and its scheduled calendar event           |
+
+#### Habits (recurring soft blocks)
+| Tool             | What it does                                                |
+| ---------------- | ----------------------------------------------------------- |
+| `create_habit`   | Adds a recurring habit (e.g. Lunch Mon-Fri ~12:00 ±90m)     |
+| `update_habit`   | Edits the habit; future occurrences get rebuilt             |
+| `delete_habit`   | Removes the habit and every Google event it has placed      |
+
 All writes carry `extendedProperties.private.skulidManaged="1"`
 plus `skulidAiSession=<conversation_id>` so they're attributable
-later and don't trigger sync rules as a feedback loop.
+later and don't trigger sync rules as a feedback loop. Task and habit
+writes also pass through the audit log with `kind="ai"`.
 
 ## Conversation persistence
 
@@ -99,6 +118,23 @@ Every write the assistant performs lands in the audit log with
 > *(assistant calls `create_event(...)` → confirmation card shown)*
 >
 > Click **Apply**. Done.
+
+> **You:** "Add a Lunch habit on my work calendar — 1 hour, around noon, weekdays."
+>
+> *(assistant calls `list_calendars()` to find the work calendar id)*
+>
+> *(assistant calls `create_habit(title="Lunch", target_calendar_id=…, duration_minutes=60, ideal_time="12:00", days_of_week=["mon","tue","wed","thu","fri"], hours_kind="personal")` → confirmation card shown)*
+>
+> Click **Apply**. The next 14 days of weekday Lunch blocks land on
+> the calendar within ±90 minutes of noon.
+
+> **You:** "Add a 90-minute task to draft the Q3 report by next Friday."
+>
+> *(assistant calls `create_task(...)` → confirmation card shown)*
+>
+> Click **Apply**. The scheduler places it in the earliest available
+> slot within Working hours, marks the task as scheduled, and you
+> see the block on your calendar.
 
 ## Limits & costs
 
