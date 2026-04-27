@@ -316,8 +316,15 @@ func dayKey(d time.Weekday) string {
 }
 
 func parseRange(r string, day time.Time, loc *time.Location) (time.Time, time.Time, bool) {
+	// Strict HH:MM-HH:MM with no trailing or leading junk. Anything else is
+	// ignored so users get a recompute that does what the form said it would.
 	var sh, sm, eh, em int
-	if _, err := fmt.Sscanf(r, "%d:%d-%d:%d", &sh, &sm, &eh, &em); err != nil {
+	var trailing rune
+	n, _ := fmt.Sscanf(r, "%d:%d-%d:%d%c", &sh, &sm, &eh, &em, &trailing)
+	if n != 4 {
+		return time.Time{}, time.Time{}, false
+	}
+	if sh < 0 || sh > 23 || eh < 0 || eh > 23 || sm < 0 || sm > 59 || em < 0 || em > 59 {
 		return time.Time{}, time.Time{}, false
 	}
 	start := time.Date(day.Year(), day.Month(), day.Day(), sh, sm, 0, 0, loc)
