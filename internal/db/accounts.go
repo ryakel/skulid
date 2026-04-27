@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -14,6 +15,10 @@ type AccountRepo struct {
 }
 
 func NewAccountRepo(pool *pgxpool.Pool) *AccountRepo { return &AccountRepo{pool: pool} }
+
+const accountSelectCols = `id, google_sub, email, refresh_token_sealed, access_token_sealed,
+	       access_token_expires_at, primary_calendar_id, created_at,
+	       working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb`
 
 func (r *AccountRepo) Upsert(ctx context.Context, sub, email, refreshSealed, accessSealed string, accessExpires *time.Time) (int64, error) {
 	var id int64
@@ -46,19 +51,23 @@ func (r *AccountRepo) SetPrimaryCalendar(ctx context.Context, id int64, primaryI
 	return err
 }
 
+// UpdateHours stores the three working-hours JSON blobs for an account. Empty
+// inputs are stored as SQL NULL, which the readers treat as "use the default
+// or fall back to working".
+func (r *AccountRepo) UpdateHours(ctx context.Context, id int64, working, personal, meeting json.RawMessage) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE account SET working_hours_jsonb = $2, personal_hours_jsonb = $3, meeting_hours_jsonb = $4
+		WHERE id = $1`, id, nullableJSON(working), nullableJSON(personal), nullableJSON(meeting))
+	return err
+}
+
 func (r *AccountRepo) Get(ctx context.Context, id int64) (*Account, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, google_sub, email, refresh_token_sealed, access_token_sealed,
-		       access_token_expires_at, primary_calendar_id, created_at
-		FROM account WHERE id = $1`, id)
+	row := r.pool.QueryRow(ctx, `SELECT `+accountSelectCols+` FROM account WHERE id = $1`, id)
 	return scanAccount(row)
 }
 
 func (r *AccountRepo) GetBySub(ctx context.Context, sub string) (*Account, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, google_sub, email, refresh_token_sealed, access_token_sealed,
-		       access_token_expires_at, primary_calendar_id, created_at
-		FROM account WHERE google_sub = $1`, sub)
+	row := r.pool.QueryRow(ctx, `SELECT `+accountSelectCols+` FROM account WHERE google_sub = $1`, sub)
 	a, err := scanAccount(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -67,10 +76,7 @@ func (r *AccountRepo) GetBySub(ctx context.Context, sub string) (*Account, error
 }
 
 func (r *AccountRepo) List(ctx context.Context) ([]Account, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, google_sub, email, refresh_token_sealed, access_token_sealed,
-		       access_token_expires_at, primary_calendar_id, created_at
-		FROM account ORDER BY id`)
+	rows, err := r.pool.Query(ctx, `SELECT `+accountSelectCols+` FROM account ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +104,49 @@ type rowScanner interface {
 func scanAccount(row rowScanner) (*Account, error) {
 	var a Account
 	if err := row.Scan(&a.ID, &a.GoogleSub, &a.Email, &a.RefreshTokenSealed,
-		&a.AccessTokenSealed, &a.AccessTokenExpiresAt, &a.PrimaryCalendarID, &a.CreatedAt); err != nil {
+		&a.AccessTokenSealed, &a.AccessTokenExpiresAt, &a.PrimaryCalendarID, &a.CreatedAt,
+		&a.WorkingHours, &a.PersonalHours, &a.MeetingHours); err != nil {
 		return nil, err
 	}
 	return &a, nil
+}
+
+// nullableJSON converts an empty/nil RawMessage to a typed nil so pgx writes
+// SQL NULL rather than the literal string "null".
+func nullableJSON(j json.RawMessage) any {
+	if len(j) == 0 {
+		return nil
+	}
+	return []byte(j)
+}
+
+// HoursKind names the three supported per-account hour windows.
+type HoursKind string
+
+const (
+	HoursWorking  HoursKind = "working"
+	HoursPersonal HoursKind = "personal"
+	HoursMeeting  HoursKind = "meeting"
+)
+
+// EffectiveHours returns the JSON blob a caller should use for the requested
+// hour kind on this account, applying the documented fallbacks: personal and
+// meeting both fall back to working when their own column is NULL/empty.
+// Returns an empty RawMessage if even working is unset (caller can then use
+// hours.Default()).
+func (a *Account) EffectiveHours(kind HoursKind) json.RawMessage {
+	switch kind {
+	case HoursPersonal:
+		if len(a.PersonalHours) > 0 {
+			return a.PersonalHours
+		}
+		return a.WorkingHours
+	case HoursMeeting:
+		if len(a.MeetingHours) > 0 {
+			return a.MeetingHours
+		}
+		return a.WorkingHours
+	default:
+		return a.WorkingHours
+	}
 }

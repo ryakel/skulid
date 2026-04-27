@@ -102,6 +102,8 @@ func (s *Server) Router() http.Handler {
 		r.Post("/settings/rewatch", s.handleRewatchAll)
 		r.Get("/settings/categories", s.handleCategoriesPage)
 		r.Post("/settings/categories", s.handleCategoriesSave)
+		r.Get("/settings/hours", s.handleHoursPage)
+		r.Post("/settings/hours/{id}", s.handleHoursSave)
 
 		if s.Agent != nil {
 			r.Get("/assistant", s.handleAssistantList)

@@ -14,6 +14,11 @@ type Account struct {
 	AccessTokenExpiresAt  *time.Time
 	PrimaryCalendarID     string
 	CreatedAt             time.Time
+	// Per-account hour windows (Working / Personal / Meeting). All nullable JSON;
+	// readers should fall back: personal -> working -> default; meeting -> working.
+	WorkingHours          json.RawMessage
+	PersonalHours         json.RawMessage
+	MeetingHours          json.RawMessage
 }
 
 type Calendar struct {

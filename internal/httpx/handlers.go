@@ -14,6 +14,7 @@ import (
 
 	"github.com/ryakel/skulid/internal/auth"
 	"github.com/ryakel/skulid/internal/db"
+	"github.com/ryakel/skulid/internal/hours"
 	syncengine "github.com/ryakel/skulid/internal/sync"
 )
 
@@ -568,7 +569,7 @@ func (s *Server) handleBlockEditPage(w http.ResponseWriter, r *http.Request) {
 		}
 		block = got
 	}
-	wh, _ := syncengine.ParseWorkingHours(block.WorkingHours)
+	wh, _ := hours.Parse(block.WorkingHours)
 	if wh.Days == nil {
 		wh.Days = map[string][]string{}
 	}
@@ -639,7 +640,7 @@ func (s *Server) handleBlockSave(w http.ResponseWriter, r *http.Request) {
 	block.TitleTemplate = strOr(strings.TrimSpace(r.FormValue("title_template")), "Focus")
 	block.Enabled = r.FormValue("enabled") != ""
 
-	wh := syncengine.WorkingHours{
+	wh := hours.WorkingHours{
 		TimeZone: strOr(strings.TrimSpace(r.FormValue("wh_tz")), "UTC"),
 		Days:     map[string][]string{},
 	}
