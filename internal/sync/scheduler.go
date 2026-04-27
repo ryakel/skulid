@@ -22,12 +22,13 @@ type Scheduler struct {
 	accounts    *db.AccountRepo
 	calendars   *db.CalendarRepo
 	audit       *db.AuditRepo
+	settings    *db.SettingRepo
 	clientFor   ClientFor
 	log         *slog.Logger
 }
 
 func NewScheduler(tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
-	accounts *db.AccountRepo, calendars *db.CalendarRepo,
+	accounts *db.AccountRepo, calendars *db.CalendarRepo, settings *db.SettingRepo,
 	audit *db.AuditRepo, clientFor ClientFor, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		tasks:       tasks,
@@ -36,6 +37,7 @@ func NewScheduler(tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.Habi
 		accounts:    accounts,
 		calendars:   calendars,
 		audit:       audit,
+		settings:    settings,
 		clientFor:   clientFor,
 		log:         log,
 	}
@@ -175,6 +177,9 @@ func (s *Scheduler) PlaceAllPending(ctx context.Context) {
 }
 
 // busyOn pulls freebusy for one Google calendar and converts to hours.Window.
+// The result is post-padded by the configured buffer minutes (Reclaim's
+// task-break + decompression rolled up; v1 can't tell the two sources apart
+// from freebusy output alone).
 func (s *Scheduler) busyOn(ctx context.Context, cli *calendar.Client, googleCalID string,
 	from, to time.Time, tz string) ([]hours.Window, error) {
 	fb, err := cli.FreeBusy(ctx, []string{googleCalID}, from, to, tz)
@@ -195,7 +200,25 @@ func (s *Scheduler) busyOn(ctx context.Context, cli *calendar.Client, googleCalI
 			out = append(out, hours.Window{Start: ps, End: pe})
 		}
 	}
+	out = s.applyBufferPadding(ctx, out)
 	return hours.Merge(out), nil
+}
+
+// applyBufferPadding extends every busy window's end by the configured padding
+// minutes. Caller still merges, so adjacent paddings collapse correctly.
+func (s *Scheduler) applyBufferPadding(ctx context.Context, in []hours.Window) []hours.Window {
+	if s.settings == nil || len(in) == 0 {
+		return in
+	}
+	pad := time.Duration(db.LoadBuffers(ctx, s.settings).PaddingMinutes()) * time.Minute
+	if pad <= 0 {
+		return in
+	}
+	out := make([]hours.Window, len(in))
+	for i, w := range in {
+		out[i] = hours.Window{Start: w.Start, End: w.End.Add(pad)}
+	}
+	return out
 }
 
 // excludeBusyExact removes any busy windows that exactly match start/end. Used

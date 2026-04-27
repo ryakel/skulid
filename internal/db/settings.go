@@ -13,6 +13,9 @@ const (
 	SettingOwnerGoogleSub = "owner_google_sub"
 	SettingExternalURL    = "external_url"
 	SettingSchemaVersion  = "schema_version"
+	// Buffer minutes — comma-separated `task_habit_break,decompression,travel`,
+	// e.g. "30,30,30". Single string so we don't need a new table for one row.
+	SettingBuffers        = "buffers"
 )
 
 type SettingRepo struct {

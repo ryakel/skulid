@@ -152,3 +152,30 @@ func jsonOrNil(wh hours.WorkingHours) json.RawMessage {
 	}
 	return mustMarshal(wh)
 }
+
+// ---------------------------------------------------------------------------
+// Buffers
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleBuffersPage(w http.ResponseWriter, r *http.Request) {
+	data := s.pageData(r, "Buffers")
+	data["Buffers"] = db.LoadBuffers(r.Context(), s.Settings)
+	s.render(w, "buffers", data)
+}
+
+func (s *Server) handleBuffersSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	b := db.BufferSettings{
+		TaskHabitBreakMinutes: int(parseInt64(r.FormValue("task_habit_break_minutes"))),
+		DecompressionMinutes:  int(parseInt64(r.FormValue("decompression_minutes"))),
+		TravelMinutes:         int(parseInt64(r.FormValue("travel_minutes"))),
+	}
+	if err := db.SaveBuffers(r.Context(), s.Settings, b); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/settings/buffers", http.StatusFound)
+}

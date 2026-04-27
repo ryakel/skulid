@@ -67,7 +67,7 @@ func TestRendererParsesAllTemplates(t *testing.T) {
 	expected := []string{
 		"dashboard", "login", "accounts", "rules", "rule_edit",
 		"blocks", "block_edit", "audit", "settings", "categories",
-		"hours", "tasks", "task_edit", "habits", "habit_edit",
+		"hours", "buffers", "tasks", "task_edit", "habits", "habit_edit",
 		"assistant_list", "assistant_chat",
 	}
 	for _, name := range expected {

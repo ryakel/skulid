@@ -1,0 +1,23 @@
+{{define "body"}}
+<div class="row">
+<h1>Buffers</h1>
+<a href="/settings" class="button secondary">← Back to settings</a>
+</div>
+
+<p class="muted">Padding the scheduler adds around busy time when placing tasks and habits, so back-to-back blocks have breathing room. v1 honors the larger of <strong>Task &amp; Habit breaks</strong> and <strong>Decompression</strong> as universal padding. <strong>Travel time</strong> is reserved for a future release that's location-aware.</p>
+
+<form method="post" action="/settings/buffers" class="stack">
+  <label>Task &amp; Habit breaks (minutes)
+    <input type="number" min="0" max="240" name="task_habit_break_minutes" value="{{.Buffers.TaskHabitBreakMinutes}}">
+  </label>
+  <label>Decompression after meetings (minutes)
+    <input type="number" min="0" max="240" name="decompression_minutes" value="{{.Buffers.DecompressionMinutes}}">
+  </label>
+  <label>Travel time before &amp; after events (minutes) <span class="muted">(stored, not yet enforced)</span>
+    <input type="number" min="0" max="240" name="travel_minutes" value="{{.Buffers.TravelMinutes}}">
+  </label>
+  <div class="row" style="justify-content:flex-start;gap:.5rem">
+    <button type="submit">Save</button>
+  </div>
+</form>
+{{end}}
