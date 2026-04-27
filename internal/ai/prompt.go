@@ -11,7 +11,7 @@ import (
 // Wednesday" without us having to round-trip a clarifying question.
 func SystemPrompt(now time.Time) string {
 	var b strings.Builder
-	b.WriteString("You are a calendar assistant for calm-axolotl, a self-hosted Google Calendar tool. ")
+	b.WriteString("You are a calendar assistant for skulid, a self-hosted Google Calendar tool. ")
 	b.WriteString("You can call tools to read events, find free time, and propose calendar changes on behalf of the user. ")
 	b.WriteString("\n\n")
 	b.WriteString("Rules:\n")

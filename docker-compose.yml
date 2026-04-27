@@ -3,26 +3,26 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-calmaxolotl}
+      POSTGRES_USER: ${POSTGRES_USER:-skulid}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-calmaxolotl}
+      POSTGRES_DB: ${POSTGRES_DB:-skulid}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-calmaxolotl} -d ${POSTGRES_DB:-calmaxolotl}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-skulid} -d ${POSTGRES_DB:-skulid}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   app:
     build: .
-    image: calmaxolotl:local
+    image: skulid:local
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-calmaxolotl}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-calmaxolotl}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
       LISTEN_ADDR: ":8080"
       EXTERNAL_URL: ${EXTERNAL_URL:?set EXTERNAL_URL to your public https URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID}

@@ -5,7 +5,7 @@ repo.
 
 ## What this is
 
-calm-axolotl: self-hosted, single-user Google Calendar sync. One Go
+skulid: self-hosted, single-user Google Calendar sync. One Go
 binary + Postgres in Docker. Two core features (sync rules, smart
 blocks) plus an optional Anthropic-powered chat assistant.
 
@@ -17,7 +17,7 @@ configuration knob, and operations.
 ## Repo map
 
 ```
-cmd/calmaxolotl/main.go        # entrypoint; wires every dependency
+cmd/skulid/main.go        # entrypoint; wires every dependency
 internal/
   ai/                          # Anthropic assistant (only enabled when ANTHROPIC_API_KEY is set)
   auth/                        # OAuth, sessions (HMAC-SHA256), TOFU, middleware
@@ -67,16 +67,16 @@ wiki/                          # user-facing docs, synced to GitHub Wiki
 
 ### Loop guards
 
-Every event calm-axolotl writes to Google sets
+Every event skulid writes to Google sets
 `extendedProperties.private` keys that are checked before forwarding:
 
 | Key                          | Set by                       |
 | ---------------------------- | ---------------------------- |
-| `calmAxolotlManaged=1`       | every write (rules, blocks, AI) |
-| `calmAxolotlRuleId`          | sync rule mirror writes       |
-| `calmAxolotlSourceEventId`   | sync rule mirror writes       |
-| `calmAxolotlSmartBlockId`    | smart block writes            |
-| `calmAxolotlAiSession`       | AI assistant writes           |
+| `skulidManaged=1`       | every write (rules, blocks, AI) |
+| `skulidRuleId`          | sync rule mirror writes       |
+| `skulidSourceEventId`   | sync rule mirror writes       |
+| `skulidSmartBlockId`    | smart block writes            |
+| `skulidAiSession`       | AI assistant writes           |
 
 The rule engine refuses to forward any event where
 `calendar.IsManaged(ev) == true`. **Don't break this guarantee** —
@@ -140,7 +140,7 @@ Tool execution policy:
 ## When to open a PR vs commit directly
 
 The branch convention here is feature/init branches like
-`claude/calm-axolotl-init-WUUlm`. Push commits to that branch; only
+`claude/skulid-init-WUUlm`. Push commits to that branch; only
 open a PR when the branch is ready for review. **Never** push to
 `main` directly.
 

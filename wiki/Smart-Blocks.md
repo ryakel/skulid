@@ -41,7 +41,7 @@ fallback), the smart-block engine debounces by 15s and then runs:
      (preserves the Google event ID).
    - No match → insert a new block.
    - Existing block with no match → delete it.
-7. Every write carries `extendedProperties.private.calmAxolotlManaged=1`
+7. Every write carries `extendedProperties.private.skulidManaged=1`
    so it doesn't trigger sync rules and is recognizable as ours.
 
 ## DST and timezones

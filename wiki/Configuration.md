@@ -1,6 +1,6 @@
 # Configuration
 
-calm-axolotl is configured entirely via environment variables. The
+skulid is configured entirely via environment variables. The
 canonical example is [`.env.example`](https://github.com/ryakel/skulid/blob/main/.env.example)
 in the repo root.
 
@@ -36,9 +36,9 @@ The bundled `docker-compose.yml` reads:
 
 | Variable            | Default        | Used by                            |
 | ------------------- | -------------- | ---------------------------------- |
-| `POSTGRES_USER`     | `calmaxolotl`  | Postgres init + `DATABASE_URL`     |
+| `POSTGRES_USER`     | `skulid`  | Postgres init + `DATABASE_URL`     |
 | `POSTGRES_PASSWORD` | `changeme`     | Postgres init + `DATABASE_URL`     |
-| `POSTGRES_DB`       | `calmaxolotl`  | Postgres init + `DATABASE_URL`     |
+| `POSTGRES_DB`       | `skulid`  | Postgres init + `DATABASE_URL`     |
 | `HOST_PORT`         | `8080`         | Host port mapped to container 8080 |
 
 ## Notes

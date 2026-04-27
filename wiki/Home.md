@@ -1,4 +1,4 @@
-# calm-axolotl
+# skulid
 
 Self-hosted, single-user Google Calendar sync — a Reclaim.ai alternative
 you can run on a homelab box. One Go binary plus Postgres in Docker.

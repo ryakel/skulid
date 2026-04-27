@@ -8,10 +8,10 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath -ldflags="-s -w" \
-    -o /out/calmaxolotl ./cmd/calmaxolotl
+    -o /out/skulid ./cmd/skulid
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/calmaxolotl /calmaxolotl
+COPY --from=build /out/skulid /skulid
 USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/calmaxolotl"]
+ENTRYPOINT ["/skulid"]

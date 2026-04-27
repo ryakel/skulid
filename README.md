@@ -1,11 +1,11 @@
-# calm-axolotl
+# skulid
 
 > Self-hosted, single-user Google Calendar sync — a Reclaim.ai alternative
 > you can run on a homelab box.
 
-calm-axolotl is one Go binary plus a Postgres database, packaged as a
+skulid is one Go binary plus a Postgres database, packaged as a
 Docker Compose stack. You bring your own Google OAuth credentials and
-your own public HTTPS endpoint; calm-axolotl mirrors events between
+your own public HTTPS endpoint; skulid mirrors events between
 your calendars on rules you define and maintains automatic
 focus/availability blocks based on busy time elsewhere. An optional
 Claude-powered chat lets you talk to your calendars.

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	sessionCookie = "calmaxolotl_session"
+	sessionCookie = "skulid_session"
 	sessionMaxAge = 30 * 24 * time.Hour
 )
 

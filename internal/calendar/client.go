@@ -16,10 +16,15 @@ import (
 )
 
 const (
-	PropManaged       = "calmAxolotlManaged"
-	PropSourceEventID = "calmAxolotlSourceEventId"
-	PropRuleID        = "calmAxolotlRuleId"
-	PropSmartBlockID  = "calmAxolotlSmartBlockId"
+	PropManaged       = "skulidManaged"
+	PropSourceEventID = "skulidSourceEventId"
+	PropRuleID        = "skulidRuleId"
+	PropSmartBlockID  = "skulidSmartBlockId"
+
+	// Legacy keys from the pre-rename "calm-axolotl" era. Read-only — recognized
+	// by IsManaged() so any old managed event written under the previous name
+	// still gets the loop guard, but new writes only emit the new keys above.
+	legacyPropManaged = "calmAxolotlManaged"
 )
 
 type Client struct {
@@ -191,10 +196,13 @@ func SmartBlockProps(blockID int64) map[string]string {
 	}
 }
 
-// IsManaged reports whether an event was created by us.
+// IsManaged reports whether an event was created by us. Recognizes both the
+// current "skulid*" keys and the legacy "calmAxolotl*" keys so events written
+// before the project rename still trip the loop guard.
 func IsManaged(ev *calendar.Event) bool {
 	if ev == nil || ev.ExtendedProperties == nil || ev.ExtendedProperties.Private == nil {
 		return false
 	}
-	return ev.ExtendedProperties.Private[PropManaged] == "1"
+	props := ev.ExtendedProperties.Private
+	return props[PropManaged] == "1" || props[legacyPropManaged] == "1"
 }

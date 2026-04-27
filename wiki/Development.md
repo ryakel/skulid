@@ -1,6 +1,6 @@
 # Development
 
-For people hacking on calm-axolotl itself.
+For people hacking on skulid itself.
 
 ## Local setup
 
@@ -9,10 +9,10 @@ git clone https://github.com/ryakel/skulid.git
 cd skulid
 
 # Run a Postgres for development.
-docker run -d --name calmaxolotl-pg \
-  -e POSTGRES_USER=calmaxolotl \
+docker run -d --name skulid-pg \
+  -e POSTGRES_USER=skulid \
   -e POSTGRES_PASSWORD=changeme \
-  -e POSTGRES_DB=calmaxolotl \
+  -e POSTGRES_DB=skulid \
   -p 5432:5432 \
   postgres:16-alpine
 
@@ -21,7 +21,7 @@ cp .env.example .env
 # the Google credentials, SESSION_SECRET, ENCRYPTION_KEY
 export $(grep -v '^#' .env | xargs)
 
-go run ./cmd/calmaxolotl
+go run ./cmd/skulid
 ```
 
 For development without OAuth, you can:
@@ -51,7 +51,7 @@ Google are deferred — see [#integration-tests-are-deferred](#integration-tests
 ## Project layout
 
 ```
-cmd/calmaxolotl/      # main.go entrypoint
+cmd/skulid/      # main.go entrypoint
 internal/
   ai/                 # Anthropic-powered assistant (optional feature)
   auth/               # OAuth, sessions, TOFU, middleware

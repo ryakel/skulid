@@ -1,6 +1,6 @@
 # Getting Started
 
-This walks you from zero to a running calm-axolotl instance with one
+This walks you from zero to a running skulid instance with one
 Google account connected and one sync rule firing.
 
 ## Prerequisites
@@ -19,7 +19,7 @@ Google account connected and one sync rule firing.
 1. Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
 2. Create or pick a project.
 3. **OAuth consent screen**: choose **External**, add yourself as a test
-   user. (You don't need to publish the app — calm-axolotl is for one
+   user. (You don't need to publish the app — skulid is for one
    person.)
 4. **Create credentials → OAuth client ID → Web application**.
 5. Authorized redirect URIs: add `https://YOUR.PUBLIC.HOST/auth/google/callback`.
@@ -45,7 +45,7 @@ openssl rand -base64 32   # paste as ENCRYPTION_KEY
 Edit `.env`:
 
 ```ini
-EXTERNAL_URL=https://calmaxolotl.example.com
+EXTERNAL_URL=https://skulid.example.com
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 SESSION_SECRET=...
@@ -85,7 +85,7 @@ If you have multiple Google accounts (work + personal, etc.), go to
 **Accounts → + Connect Google account** and run the OAuth flow again
 for each one. They all funnel into the same instance.
 
-When an account is connected, calm-axolotl auto-discovers every calendar
+When an account is connected, skulid auto-discovers every calendar
 visible to it and registers a Google push channel (a webhook
 subscription) so changes flow back in near-real time. You can re-trigger
 discovery anytime with **Refresh calendars**.
@@ -106,7 +106,7 @@ seconds the mirror should appear on the target.
 **Smart blocks → + New smart block**. Pick a target calendar (where the
 focus/busy blocks live) and one or more source calendars (busy time read
 from these). Set working hours per weekday in your IANA timezone.
-Save → calm-axolotl writes blocks for the next 30 days and keeps them
+Save → skulid writes blocks for the next 30 days and keeps them
 fresh as the source calendars change.
 
 See [Smart Blocks](Smart-Blocks) for the full options.
@@ -115,4 +115,4 @@ See [Smart Blocks](Smart-Blocks) for the full options.
 
 - [Operations](Operations) — backups, watch renewal, troubleshooting.
 - [AI Assistant](AI-Assistant) — set up the Claude-powered chat.
-- [Security Model](Security-Model) — what calm-axolotl protects against.
+- [Security Model](Security-Model) — what skulid protects against.

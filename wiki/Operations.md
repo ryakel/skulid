@@ -9,7 +9,7 @@ Everything important is in Postgres. The token ciphertexts in the
 
 1. **Database**: snapshot the `db_data` Docker volume, or `pg_dump`:
    ```bash
-   docker compose exec db pg_dump -U calmaxolotl calmaxolotl \
+   docker compose exec db pg_dump -U skulid skulid \
      > backup-$(date +%Y%m%d).sql
    ```
 2. **Encryption key**: keep `ENCRYPTION_KEY` somewhere offline. If you
@@ -114,7 +114,7 @@ and try again.
 
 Either two channels are registered for the same calendar (rare; happens
 if a `Stop` call previously failed), or the loop guard is misfiring.
-Check that mirrored events have `extendedProperties.private.calmAxolotlManaged="1"`
+Check that mirrored events have `extendedProperties.private.skulidManaged="1"`
 in the Google UI — if not, your sealed token might be from a different
 deployment that wrote without the loop key.
 

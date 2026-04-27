@@ -17,7 +17,7 @@ import (
 
 // PropAISession stamps every assistant-driven write so it's attributable later
 // and the rule engine still treats it as managed (via PropManaged).
-const PropAISession = "calmAxolotlAiSession"
+const PropAISession = "skulidAiSession"
 
 // Toolbox bundles the dependencies a tool executor needs.
 type Toolbox struct {

@@ -1,6 +1,6 @@
 # AI Assistant
 
-calm-axolotl ships with an optional Claude-powered chat that can read
+skulid ships with an optional Claude-powered chat that can read
 and modify your calendars on your behalf. Every write requires you to
 click **Apply** before it actually hits Google.
 
@@ -22,7 +22,7 @@ link is hidden, and no part of the assistant code path executes.
 
 The assistant is a tool-use loop on top of Anthropic's
 [Messages API](https://docs.anthropic.com/en/api/messages). When you
-send a message, calm-axolotl:
+send a message, skulid:
 
 1. Persists your message into Postgres.
 2. Sends the conversation + the available tools to Claude.
@@ -32,7 +32,7 @@ send a message, calm-axolotl:
    - **Write tools** (create, update, delete, move) are *staged* — they
      show up in the chat as confirmation cards. Nothing hits Google
      until you click **Apply**.
-4. When you apply or reject every staged action, calm-axolotl sends the
+4. When you apply or reject every staged action, skulid sends the
    results back to Claude and the loop continues until the assistant
    ends its turn with a text reply.
 
@@ -56,8 +56,8 @@ send a message, calm-axolotl:
 | `delete_event`   | Removes an event                                            |
 | `move_event`     | Convenience for changing only start+end                     |
 
-All writes carry `extendedProperties.private.calmAxolotlManaged="1"`
-plus `calmAxolotlAiSession=<conversation_id>` so they're attributable
+All writes carry `extendedProperties.private.skulidManaged="1"`
+plus `skulidAiSession=<conversation_id>` so they're attributable
 later and don't trigger sync rules as a feedback loop.
 
 ## Conversation persistence
@@ -103,7 +103,7 @@ Every write the assistant performs lands in the audit log with
 ## Limits & costs
 
 - The assistant uses your `ANTHROPIC_API_KEY` directly. You pay
-  Anthropic for tokens consumed; calm-axolotl doesn't proxy through
+  Anthropic for tokens consumed; skulid doesn't proxy through
   any third party.
 - Conversations capped at the model's context window — the daemon
   doesn't auto-truncate, so very long chats may eventually fail. If

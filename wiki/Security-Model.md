@@ -1,10 +1,10 @@
 # Security Model
 
-What calm-axolotl protects against, and what it doesn't.
+What skulid protects against, and what it doesn't.
 
 ## Threat model
 
-calm-axolotl is built for a single user running it on their own
+skulid is built for a single user running it on their own
 infrastructure (homelab, VPS, behind a tunnel). It is not multi-tenant
 and the auth model assumes the operator is the only legitimate user.
 

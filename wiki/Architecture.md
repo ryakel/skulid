@@ -1,13 +1,13 @@
 # Architecture
 
-A 10,000-foot tour of how calm-axolotl is built and how data flows
+A 10,000-foot tour of how skulid is built and how data flows
 through it.
 
 ## Component map
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      calmaxolotl (one Go binary)                │
+│                      skulid (one Go binary)                │
 │                                                                 │
 │  HTTP layer (chi)         Engines              Workers          │
 │  ┌──────────────┐         ┌────────────┐     ┌───────────────┐ │
@@ -68,7 +68,7 @@ through it.
 | `event_link`      | Links a source event to its mirror; loop-guard primary key     |
 | `smart_block`     | A focus-block recipe (target, sources, working hours, horizon) |
 | `managed_block`   | Each focus block we've actually written to Google              |
-| `audit_log`       | What calm-axolotl did and why                                  |
+| `audit_log`       | What skulid did and why                                  |
 | `ai_conversation` | One AI assistant chat (30-day TTL)                             |
 | `ai_message`      | One turn within a conversation                                 |
 | `ai_pending_action` | Tool call awaiting human confirmation                        |
@@ -95,19 +95,19 @@ If the webhook is dropped (network glitch, channel expired), the
 walks `sync_token` rows whose `last_polled_at` is stale and triggers an
 incremental sync regardless.
 
-### Outbound: a calm-axolotl write
+### Outbound: a skulid write
 
 Every write to Google sets `extendedProperties.private`:
 
 ```json
 {
-  "calmAxolotlManaged": "1",
-  "calmAxolotlRuleId": "42",
-  "calmAxolotlSourceEventId": "abc123"
+  "skulidManaged": "1",
+  "skulidRuleId": "42",
+  "skulidSourceEventId": "abc123"
 }
 ```
 
-Smart-block writes use `calmAxolotlSmartBlockId` instead of the rule
+Smart-block writes use `skulidSmartBlockId` instead of the rule
 fields. When the corresponding webhook bounces back, the rule engine
 sees `IsManaged() == true` and refuses to forward it — that's the
 primary loop guard. The `event_link` table is the secondary guard for
@@ -128,7 +128,7 @@ sync, the engine skips the update.
 ## Where things live
 
 ```
-cmd/calmaxolotl/main.go        # entrypoint, wires everything together
+cmd/skulid/main.go        # entrypoint, wires everything together
 internal/
   config/                      # env-var loading
   crypto/                      # AES-256-GCM token sealing

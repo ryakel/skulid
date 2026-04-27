@@ -62,8 +62,8 @@ are *not* mirrored back. This is the safe default.
 Source ↔ target. The rule engine processes events from both calendars.
 Two safeguards prevent infinite loops:
 
-1. **Loop guard via `extendedProperties`** — every mirror calm-axolotl
-   writes carries `calmAxolotlManaged=1`, and the rule engine refuses
+1. **Loop guard via `extendedProperties`** — every mirror skulid
+   writes carries `skulidManaged=1`, and the rule engine refuses
    to re-process those events.
 2. **Etag dedup** — if a webhook fires for an event whose etag matches
    what we last saw, the rule skips the no-op update.

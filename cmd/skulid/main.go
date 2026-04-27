@@ -1,5 +1,5 @@
-// Command calmaxolotl is the entrypoint for the calm-axolotl daemon: a
-// self-hosted, single-user Google Calendar sync server.
+// Command skulid is the entrypoint for the skulid daemon: a self-hosted,
+// single-user Google Calendar sync server.
 package main
 
 import (
