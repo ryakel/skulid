@@ -153,12 +153,21 @@ Tool execution policy:
   clicks **Apply** in the UI.
 - Every assistant write writes to `audit_log` with `kind="ai"`.
 
-## When to open a PR vs commit directly
+## Branches, commits, and PRs
 
-The branch convention here is feature/init branches like
-`claude/skulid-init-WUUlm`. Push commits to that branch; only
-open a PR when the branch is ready for review. **Never** push to
-`main` directly.
+- **`main` is the default branch.** Never push to it directly.
+- **Feature branches: `claude/<topic>`** — short, descriptive,
+  topic-scoped (e.g. `claude/travel-buffers`,
+  `claude/scheduling-links`). Avoid stamped/random suffixes.
+- **Commit style: small + focused.** One logical change per commit,
+  with a descriptive message. Don't batch unrelated work into a
+  single commit even if it's all going into the same PR.
+- **PR style: big + thematic.** A PR can carry several commits that
+  together make one coherent feature; the *PR* is the unit of
+  review, not the commit. Write the PR description so each commit
+  in the list is legible at a glance.
+- **Owner reviews and merges.** Open the PR ready-to-merge, hand
+  off, then move on to the next branch.
 
 ## Links
 
