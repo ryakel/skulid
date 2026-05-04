@@ -26,7 +26,7 @@ func Load() (*Config, error) {
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		ExternalURL:        strings.TrimRight(os.Getenv("EXTERNAL_URL"), "/"),
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		ListenAddr:         envOr("LISTEN_ADDR", ":8080"),
+		ListenAddr:         envOr("LISTEN_ADDR", ":8567"),
 		AnthropicAPIKey:    os.Getenv("ANTHROPIC_API_KEY"),
 		AnthropicModel:     envOr("ANTHROPIC_MODEL", "claude-opus-4-7"),
 	}

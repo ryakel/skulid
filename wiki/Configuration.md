@@ -26,7 +26,7 @@ openssl rand -base64 32   # ENCRYPTION_KEY
 
 | Variable             | Default          | Meaning                                      |
 | -------------------- | ---------------- | -------------------------------------------- |
-| `LISTEN_ADDR`        | `:8080`          | TCP address the HTTP server binds to         |
+| `LISTEN_ADDR`        | `:8567`          | TCP address the HTTP server binds to         |
 | `ANTHROPIC_API_KEY`  | unset (off)      | Enable the AI assistant; see [AI Assistant](AI-Assistant) |
 | `ANTHROPIC_MODEL`    | `claude-opus-4-7` | Model the assistant uses                    |
 
@@ -39,7 +39,7 @@ The bundled `docker-compose.yml` reads:
 | `POSTGRES_USER`     | `skulid`  | Postgres init + `DATABASE_URL`     |
 | `POSTGRES_PASSWORD` | `changeme`     | Postgres init + `DATABASE_URL`     |
 | `POSTGRES_DB`       | `skulid`  | Postgres init + `DATABASE_URL`     |
-| `HOST_PORT`         | `8080`         | Host port mapped to container 8080 |
+| `HOST_PORT`         | `8567`         | Host port mapped to container 8567 |
 
 ## Notes
 

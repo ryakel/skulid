@@ -23,7 +23,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
-      LISTEN_ADDR: ":8080"
+      LISTEN_ADDR: ":8567"
       EXTERNAL_URL: ${EXTERNAL_URL:?set EXTERNAL_URL to your public https URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET}
@@ -32,7 +32,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
     ports:
-      - "${HOST_PORT:-8080}:8080"
+      - "${HOST_PORT:-8567}:8567"
 
 volumes:
   db_data:
