@@ -41,6 +41,16 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Or pull the prebuilt multi-arch image straight from
+[GitHub Container Registry](https://github.com/ryakel/skulid/pkgs/container/skulid):
+
+```bash
+docker pull ghcr.io/ryakel/skulid:latest
+```
+
+Tags `latest` and `vX.Y.Z` are published on every push to `main` by
+`.github/workflows/build-and-publish.yml`.
+
 Open `EXTERNAL_URL` in a browser, sign in with Google, you own the
 instance. Full walkthrough in
 [Getting Started](https://github.com/ryakel/skulid/wiki/Getting-Started).

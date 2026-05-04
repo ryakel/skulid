@@ -24,9 +24,16 @@ import (
 	"github.com/ryakel/skulid/internal/worker"
 )
 
+// appVersion is overridden at build time via
+// `-ldflags "-X main.appVersion=..."` so the binary self-reports its release.
+// Defaults to "dev" for `go run` / tests / fresh `go build` invocations.
+var appVersion = "dev"
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(log)
+
+	log.Info("skulid starting", "version", appVersion)
 
 	if err := run(log); err != nil {
 		log.Error("fatal", "err", err)
