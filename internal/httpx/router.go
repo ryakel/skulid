@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/ryakel/skulid/internal/ai"
 	"github.com/ryakel/skulid/internal/auth"
 	"github.com/ryakel/skulid/internal/config"
 	"github.com/ryakel/skulid/internal/crypto"
@@ -34,12 +35,22 @@ type Server struct {
 	Managed        *db.ManagedBlockRepo
 	Links          *db.EventLinkRepo
 	Audit          *db.AuditRepo
+	Categories     *db.CategoryRepo
+	Tasks          *db.TaskRepo
+	Habits         *db.HabitRepo
+	Occurrences    *db.HabitOccurrenceRepo
+	Scheduler      *syncengine.Scheduler
 	Engine         *syncengine.Engine
 	ClientFor      syncengine.ClientFor
 	Worker         *worker.Manager
 	Renderer       *Renderer
 	WebhookHandler *webhook.Handler
-	Log            *slog.Logger
+	// AI assistant — nil-safe; routes are only registered when Agent != nil.
+	AIConversations *db.AIConversationRepo
+	AIMessages      *db.AIMessageRepo
+	AIPending       *db.AIPendingActionRepo
+	Agent           *ai.Agent
+	Log             *slog.Logger
 }
 
 func (s *Server) Router() http.Handler {
@@ -66,11 +77,15 @@ func (s *Server) Router() http.Handler {
 		r.Use(auth.RequireOwner(s.Sessions, s.TOFU))
 
 		r.Get("/", s.handleDashboard)
+		r.Get("/planner", s.handlePlannerPage)
+		r.Get("/priorities", s.handlePrioritiesPage)
 
 		r.Get("/accounts", s.handleAccountsPage)
 		r.Post("/accounts/connect", s.handleAccountConnect)
 		r.Post("/accounts/{id}/refresh", s.handleAccountRefresh)
 		r.Post("/accounts/{id}/delete", s.handleAccountDelete)
+		r.Get("/calendars/{id}", s.handleCalendarSettings)
+		r.Post("/calendars/{id}", s.handleCalendarSettingsSave)
 
 		r.Get("/rules", s.handleRulesPage)
 		r.Get("/rules/new", s.handleRuleEditPage)
@@ -89,10 +104,44 @@ func (s *Server) Router() http.Handler {
 		r.Post("/blocks/{id}/delete", s.handleBlockDelete)
 		r.Post("/blocks/{id}/recompute", s.handleBlockRecompute)
 
+		r.Get("/tasks", s.handleTasksPage)
+		r.Get("/tasks/new", s.handleTaskEditPage)
+		r.Get("/tasks/{id}", s.handleTaskEditPage)
+		r.Post("/tasks", s.handleTaskSave)
+		r.Post("/tasks/{id}", s.handleTaskSave)
+		r.Post("/tasks/{id}/delete", s.handleTaskDelete)
+		r.Post("/tasks/{id}/place", s.handleTaskPlace)
+		r.Post("/tasks/{id}/complete", s.handleTaskComplete)
+
+		r.Get("/habits", s.handleHabitsPage)
+		r.Get("/habits/new", s.handleHabitEditPage)
+		r.Get("/habits/{id}", s.handleHabitEditPage)
+		r.Post("/habits", s.handleHabitSave)
+		r.Post("/habits/{id}", s.handleHabitSave)
+		r.Post("/habits/{id}/delete", s.handleHabitDelete)
+		r.Post("/habits/{id}/place", s.handleHabitPlace)
+
 		r.Get("/audit", s.handleAuditPage)
 
 		r.Get("/settings", s.handleSettingsPage)
 		r.Post("/settings/rewatch", s.handleRewatchAll)
+		r.Get("/settings/categories", s.handleCategoriesPage)
+		r.Post("/settings/categories", s.handleCategoriesSave)
+		r.Get("/settings/hours", s.handleHoursPage)
+		r.Post("/settings/hours/{id}", s.handleHoursSave)
+		r.Get("/settings/buffers", s.handleBuffersPage)
+		r.Post("/settings/buffers", s.handleBuffersSave)
+		r.Post("/settings/buffers/recompute", s.handleBuffersRecompute)
+
+		if s.Agent != nil {
+			r.Get("/assistant", s.handleAssistantList)
+			r.Post("/assistant", s.handleAssistantNew)
+			r.Get("/assistant/{id}", s.handleAssistantChat)
+			r.Post("/assistant/{id}/message", s.handleAssistantSend)
+			r.Post("/assistant/{id}/actions/{aid}/apply", s.handleAssistantApply)
+			r.Post("/assistant/{id}/actions/{aid}/reject", s.handleAssistantReject)
+			r.Post("/assistant/{id}/delete", s.handleAssistantDelete)
+		}
 	})
 
 	r.Get("/static/*", http.StripPrefix("/static/", staticHandler()).ServeHTTP)

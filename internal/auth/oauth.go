@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	stateCookie    = "calmaxolotl_oauth_state"
-	intentCookie   = "calmaxolotl_oauth_intent"
+	stateCookie    = "skulid_oauth_state"
+	intentCookie   = "skulid_oauth_intent"
 	IntentLogin    = "login"    // owner login (TOFU)
 	IntentConnect  = "connect"  // additional account connection
 )

@@ -1,0 +1,224 @@
+# Builds the skulid container, tests it, and publishes to GHCR plus an
+# optional internal registry. Mirrors the structure of
+# ryakel/boomerang/.github/workflows/build-and-publish.yml so the same
+# patterns work across both repos.
+#
+# What runs when:
+#   * PR to main          : Go vet + tests + multi-arch build (no push)
+#   * push to main        : full pipeline; auto-bumps a semver tag from
+#                           conventional commit messages, pushes :latest
+#                           and :vX.Y.Z to GHCR + internal registry, and
+#                           triggers a Portainer redeploy webhook.
+#   * push of vX.Y.Z tag  : pushes a single :vX.Y.Z image (no version
+#                           bump, no release).
+#   * workflow_dispatch   : same as push to main.
+#
+# Optional repository secrets — the matching steps are skipped when the
+# value is empty, so the workflow is a no-op for these on first install:
+#   INTERNAL_REGISTRY            registry hostname (e.g. registry.home.lan:5000)
+#   INTERNAL_REGISTRY_USERNAME   login user
+#   INTERNAL_REGISTRY_PASSWORD   login password / token
+#   PORTAINER_WEBHOOK_URL        full Portainer service-update webhook URL
+#   TS_OAUTH_CLIENT_ID           Tailscale OAuth client (only needed if
+#   TS_OAUTH_SECRET              the internal registry / Portainer live
+#                                inside a Tailnet)
+
+name: Build and publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    paths-ignore:
+      - "**/*.md"
+      - "wiki/**"
+      - "LICENSE*"
+      - ".gitignore"
+      - "CLAUDE.md"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "wiki/**"
+      - "LICENSE*"
+      - ".gitignore"
+      - "CLAUDE.md"
+
+permissions:
+  contents: write
+  actions: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: "1.25"
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      INTERNAL_REGISTRY: ${{ secrets.INTERNAL_REGISTRY }}
+      PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Set Docker tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            echo "is_tag_push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "is_tag_push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version and push tag
+        id: bump
+        if: |
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          custom_release_rules: |
+            major:major,
+            breaking:major,
+            minor:minor,
+            feat:minor,
+            patch:patch,
+            fix:patch
+
+      - name: Create GitHub release
+        if: |
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.bump.outputs.new_tag != ''
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.bump.outputs.new_tag }}
+          name: ${{ steps.bump.outputs.new_tag }}
+          body: ${{ steps.bump.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        if: github.event_name != 'pull_request'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: github.event_name != 'pull_request'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to internal registry
+        if: |
+          github.event_name != 'pull_request' &&
+          env.INTERNAL_REGISTRY != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.INTERNAL_REGISTRY }}
+          username: ${{ secrets.INTERNAL_REGISTRY_USERNAME }}
+          password: ${{ secrets.INTERNAL_REGISTRY_PASSWORD }}
+
+      - name: Compute image tags
+        id: tags
+        if: github.event_name != 'pull_request'
+        run: |
+          set -e
+          tags=()
+          # Tag-push: a single immutable image keyed off the git tag.
+          if [[ "${{ steps.tag.outputs.is_tag_push }}" == "true" ]]; then
+            v="${{ steps.tag.outputs.tag }}"
+            tags+=("${REGISTRY}/${IMAGE_NAME}:${v}")
+            if [[ -n "${INTERNAL_REGISTRY}" ]]; then
+              tags+=("${INTERNAL_REGISTRY}/${IMAGE_NAME}:${v}")
+            fi
+            echo "app_version=${v}" >> "$GITHUB_OUTPUT"
+          else
+            # main-push (or workflow_dispatch on main): :latest + :vX.Y.Z
+            v="${{ steps.bump.outputs.new_tag }}"
+            if [[ -z "${v}" ]]; then v="latest"; fi
+            tags+=("${REGISTRY}/${IMAGE_NAME}:latest")
+            tags+=("${REGISTRY}/${IMAGE_NAME}:${v}")
+            if [[ -n "${INTERNAL_REGISTRY}" ]]; then
+              tags+=("${INTERNAL_REGISTRY}/${IMAGE_NAME}:latest")
+              tags+=("${INTERNAL_REGISTRY}/${IMAGE_NAME}:${v}")
+            fi
+            echo "app_version=${v}" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "tags<<EOF"
+            printf '%s\n' "${tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: true
+          sbom: true
+          build-args: |
+            APP_VERSION=${{ steps.tags.outputs.app_version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build (PR — no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+
+      - name: Connect to Tailscale
+        if: |
+          github.event_name != 'pull_request' &&
+          env.TS_OAUTH_CLIENT_ID != ''
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Trigger Portainer redeploy
+        if: |
+          github.event_name != 'pull_request' &&
+          env.PORTAINER_WEBHOOK_URL != ''
+        run: |
+          curl -fsS -X POST "${PORTAINER_WEBHOOK_URL}" \
+            -H 'Content-Type: application/json' \
+            --data "{\"image\":\"${REGISTRY}/${IMAGE_NAME}:${{ steps.tags.outputs.app_version }}\"}"

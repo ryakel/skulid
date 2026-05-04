@@ -1,0 +1,34 @@
+{{define "body"}}
+<div class="row">
+<h1>Assistant</h1>
+</div>
+
+<form method="post" action="/assistant" class="stack">
+  <label>Start a new conversation
+    <textarea name="text" rows="3" required placeholder="What can I help with? e.g. 'Move my dentist appointment from Thursday to Friday at the same time.'"></textarea>
+  </label>
+  <div><button type="submit">Send</button></div>
+</form>
+
+<h2>Recent conversations</h2>
+{{if .Conversations}}
+<table>
+  <thead><tr><th>Title</th><th>State</th><th>Updated</th><th></th></tr></thead>
+  <tbody>
+  {{range .Conversations}}
+    <tr>
+      <td><a href="/assistant/{{.ID}}">{{if .Title}}{{.Title}}{{else}}(untitled){{end}}</a></td>
+      <td>{{.State}}</td>
+      <td>{{fmtTime .UpdatedAt}}</td>
+      <td class="actions">
+        <form method="post" action="/assistant/{{.ID}}/delete" onsubmit="return confirm('Delete conversation?')"><button type="submit" class="danger">Delete</button></form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+<p class="muted">Conversations auto-delete after 30 days of inactivity.</p>
+{{else}}
+<p class="muted">No conversations yet.</p>
+{{end}}
+{{end}}

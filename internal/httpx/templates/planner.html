@@ -1,0 +1,59 @@
+{{define "body"}}
+<div class="row planner-header">
+  <div>
+    <h1 style="margin:0">Planner</h1>
+    <div class="muted">{{.WeekStartLabel}} – {{.WeekEndLabel}}</div>
+  </div>
+  <div class="row" style="gap:.5rem">
+    <a class="button secondary" href="/planner?w={{.PrevWeek}}">← Prev</a>
+    <a class="button secondary" href="/planner">Today</a>
+    <a class="button secondary" href="/planner?w={{.NextWeek}}">Next →</a>
+  </div>
+</div>
+
+<div class="planner-totals">
+{{range .CategoryTotals}}
+  <div class="planner-total" style="--c:{{.Color}}">
+    <span class="dot" style="background:{{.Color}}"></span>
+    <strong>{{.Name}}</strong>
+    <span class="muted">{{.Hours}}h</span>
+  </div>
+{{end}}
+{{if not .CategoryTotals}}<div class="muted">No events on calendars this week.</div>{{end}}
+</div>
+
+<div class="planner-grid">
+  <div class="planner-corner"></div>
+  {{range .Days}}
+    <div class="planner-day-header {{if .IsToday}}is-today{{end}}">
+      <div class="day-name">{{.Label}}</div>
+      <div class="day-date">{{.DateLabel}}</div>
+    </div>
+  {{end}}
+
+  <div class="planner-allday-rail muted">all-day</div>
+  {{range .Days}}
+    <div class="planner-allday-cell">
+      {{range .AllDay}}
+        <div class="planner-allday" style="background:{{.CategoryColor}}; color:#fff" title="{{.Title}}">{{.Title}}</div>
+      {{end}}
+    </div>
+  {{end}}
+
+  <div class="planner-hours">
+    {{range .HourLabels}}<div class="planner-hour">{{.}}</div>{{end}}
+  </div>
+  {{range .Days}}
+    <div class="planner-day {{if .IsToday}}is-today{{end}}">
+      {{range .Timed}}
+        <div class="planner-event"
+             style="top:{{.TopPct}}%; height:{{.HeightPct}}%; background:{{.CategoryColor}}1a; border-left-color:{{.CategoryColor}}"
+             title="{{.Title}} · {{.StartLabel}} · {{.DurationLabel}}">
+          <div class="ev-title">{{.Title}}</div>
+          <div class="ev-meta">{{.StartLabel}} · {{.DurationLabel}}</div>
+        </div>
+      {{end}}
+    </div>
+  {{end}}
+</div>
+{{end}}

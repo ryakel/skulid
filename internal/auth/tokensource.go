@@ -76,7 +76,7 @@ func (a *AccountTokenSource) Token() (*oauth2.Token, error) {
 	a.current = fresh
 	// Defensive: never hand back an already-expired token.
 	if !fresh.Expiry.IsZero() && time.Now().After(fresh.Expiry) {
-		return nil, oauth2.RetrieveError{}
+		return nil, &oauth2.RetrieveError{}
 	}
 	return fresh, nil
 }

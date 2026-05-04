@@ -2,59 +2,16 @@ package sync
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"sort"
 	"time"
 
 	gcal "google.golang.org/api/calendar/v3"
 
 	"github.com/ryakel/skulid/internal/calendar"
 	"github.com/ryakel/skulid/internal/db"
+	"github.com/ryakel/skulid/internal/hours"
 )
-
-// WorkingHours describes per-weekday availability windows in a specific
-// IANA timezone. Each window is HH:MM-HH:MM (24h, local to TimeZone).
-type WorkingHours struct {
-	TimeZone string              `json:"time_zone"`
-	Days     map[string][]string `json:"days"` // "mon" -> ["09:00-12:00","13:00-17:00"]
-}
-
-func ParseWorkingHours(raw json.RawMessage) (WorkingHours, error) {
-	var w WorkingHours
-	if len(raw) == 0 {
-		return defaultWorkingHours(), nil
-	}
-	if err := json.Unmarshal(raw, &w); err != nil {
-		return w, err
-	}
-	if w.TimeZone == "" {
-		w.TimeZone = "UTC"
-	}
-	if w.Days == nil {
-		w.Days = map[string][]string{}
-	}
-	return w, nil
-}
-
-func defaultWorkingHours() WorkingHours {
-	return WorkingHours{
-		TimeZone: "UTC",
-		Days: map[string][]string{
-			"mon": {"09:00-17:00"},
-			"tue": {"09:00-17:00"},
-			"wed": {"09:00-17:00"},
-			"thu": {"09:00-17:00"},
-			"fri": {"09:00-17:00"},
-		},
-	}
-}
-
-type window struct {
-	Start time.Time
-	End   time.Time
-}
 
 type SmartBlockEngine struct {
 	blocks    *db.SmartBlockRepo
@@ -95,7 +52,7 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 		return err
 	}
 
-	wh, err := ParseWorkingHours(b.WorkingHours)
+	wh, err := hours.Parse(b.WorkingHours)
 	if err != nil {
 		return fmt.Errorf("parse working hours: %w", err)
 	}
@@ -113,7 +70,7 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 	end := start.AddDate(0, 0, horizon)
 
 	// Aggregate busy windows from each source calendar (use that calendar's account).
-	var allBusy []window
+	var allBusy []hours.Window
 	for _, srcID := range b.SourceCalendarIDs {
 		srcCal, err := s.calendars.Get(ctx, srcID)
 		if err != nil {
@@ -138,20 +95,20 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 				if err != nil {
 					continue
 				}
-				allBusy = append(allBusy, window{ps, pe})
+				allBusy = append(allBusy, hours.Window{Start: ps, End: pe})
 			}
 		}
 	}
-	allBusy = mergeWindows(allBusy)
+	allBusy = hours.Merge(allBusy)
 
 	// Build availability windows from working hours, then subtract busy time.
-	avail := workingWindows(wh, start, end, loc)
-	free := subtractBusy(avail, allBusy)
+	avail := hours.Expand(wh, start, end, loc)
+	free := hours.SubtractBusy(avail, allBusy)
 
 	// Apply min duration & merge gap.
-	free = mergeWithGap(free, time.Duration(b.MergeGapMinutes)*time.Minute)
+	free = hours.MergeWithGap(free, time.Duration(b.MergeGapMinutes)*time.Minute)
 	min := time.Duration(b.MinBlockMinutes) * time.Minute
-	desired := make([]window, 0, len(free))
+	desired := make([]hours.Window, 0, len(free))
 	for _, w := range free {
 		if w.End.Sub(w.Start) >= min {
 			desired = append(desired, w)
@@ -163,7 +120,6 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 	if err != nil {
 		return err
 	}
-	// Filter existing to those overlapping [start, end] — outside-horizon ones we leave alone.
 	type managedWithIdx struct {
 		idx int
 		m   db.ManagedBlock
@@ -184,7 +140,7 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 			if matchedExisting[j] {
 				continue
 			}
-			if windowsOverlap(d, window{e.m.StartsAt, e.m.EndsAt}) {
+			if hours.Overlap(d, hours.Window{Start: e.m.StartsAt, End: e.m.EndsAt}) {
 				matchIdx = j
 				break
 			}
@@ -264,136 +220,4 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 		})
 	}
 	return nil
-}
-
-// workingWindows expands per-weekday WorkingHours into concrete time windows
-// across [from, to). All times are in the working-hours timezone.
-func workingWindows(wh WorkingHours, from, to time.Time, loc *time.Location) []window {
-	var out []window
-	day := from
-	for day.Before(to) {
-		key := dayKey(day.Weekday())
-		ranges := wh.Days[key]
-		for _, r := range ranges {
-			start, end, ok := parseRange(r, day, loc)
-			if !ok {
-				continue
-			}
-			if end.Before(from) || start.After(to) {
-				continue
-			}
-			if start.Before(from) {
-				start = from
-			}
-			if end.After(to) {
-				end = to
-			}
-			out = append(out, window{start, end})
-		}
-		day = day.AddDate(0, 0, 1)
-	}
-	return out
-}
-
-func dayKey(d time.Weekday) string {
-	switch d {
-	case time.Monday:
-		return "mon"
-	case time.Tuesday:
-		return "tue"
-	case time.Wednesday:
-		return "wed"
-	case time.Thursday:
-		return "thu"
-	case time.Friday:
-		return "fri"
-	case time.Saturday:
-		return "sat"
-	case time.Sunday:
-		return "sun"
-	}
-	return ""
-}
-
-func parseRange(r string, day time.Time, loc *time.Location) (time.Time, time.Time, bool) {
-	var sh, sm, eh, em int
-	if _, err := fmt.Sscanf(r, "%d:%d-%d:%d", &sh, &sm, &eh, &em); err != nil {
-		return time.Time{}, time.Time{}, false
-	}
-	start := time.Date(day.Year(), day.Month(), day.Day(), sh, sm, 0, 0, loc)
-	end := time.Date(day.Year(), day.Month(), day.Day(), eh, em, 0, 0, loc)
-	if !end.After(start) {
-		return time.Time{}, time.Time{}, false
-	}
-	return start, end, true
-}
-
-func mergeWindows(in []window) []window {
-	if len(in) == 0 {
-		return nil
-	}
-	sort.Slice(in, func(i, j int) bool { return in[i].Start.Before(in[j].Start) })
-	out := []window{in[0]}
-	for _, w := range in[1:] {
-		last := &out[len(out)-1]
-		if !w.Start.After(last.End) {
-			if w.End.After(last.End) {
-				last.End = w.End
-			}
-			continue
-		}
-		out = append(out, w)
-	}
-	return out
-}
-
-func subtractBusy(avail, busy []window) []window {
-	var out []window
-	for _, a := range avail {
-		segs := []window{a}
-		for _, b := range busy {
-			var next []window
-			for _, s := range segs {
-				if !windowsOverlap(s, b) {
-					next = append(next, s)
-					continue
-				}
-				if s.Start.Before(b.Start) {
-					next = append(next, window{s.Start, b.Start})
-				}
-				if s.End.After(b.End) {
-					next = append(next, window{b.End, s.End})
-				}
-			}
-			segs = next
-			if len(segs) == 0 {
-				break
-			}
-		}
-		out = append(out, segs...)
-	}
-	return out
-}
-
-func mergeWithGap(in []window, gap time.Duration) []window {
-	if len(in) == 0 {
-		return nil
-	}
-	sort.Slice(in, func(i, j int) bool { return in[i].Start.Before(in[j].Start) })
-	out := []window{in[0]}
-	for _, w := range in[1:] {
-		last := &out[len(out)-1]
-		if w.Start.Sub(last.End) <= gap {
-			if w.End.After(last.End) {
-				last.End = w.End
-			}
-			continue
-		}
-		out = append(out, w)
-	}
-	return out
-}
-
-func windowsOverlap(a, b window) bool {
-	return a.Start.Before(b.End) && b.Start.Before(a.End)
 }

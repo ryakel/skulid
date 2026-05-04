@@ -1,0 +1,85 @@
+{{define "body"}}
+<div class="row">
+  <div>
+    <h1 style="margin:0">{{.Form.Calendar.Summary}}</h1>
+    <div class="muted">{{.Form.AccountEmail}} · <code>{{.Form.Calendar.GoogleCalendarID}}</code></div>
+  </div>
+  <a href="/accounts" class="button secondary">← Back to accounts</a>
+</div>
+
+<p class="muted">Per-calendar overrides for hours, buffers, and the default
+category. Leave any field blank to fall back to the account-level (hours) or
+global (buffers) value. The categorizer pin only kicks in when the heuristic
+would otherwise choose <code>other</code>.</p>
+
+<form method="post" action="/calendars/{{.Form.Calendar.ID}}" class="stack">
+  <fieldset>
+    <legend>Default category</legend>
+    <label>Falls back to the auto-categorizer when blank
+      <select name="default_category_id">
+        <option value="">(auto)</option>
+        {{range .Form.Categories}}
+          <option value="{{.ID}}" {{if and $.Form.Calendar.DefaultCategoryID (eq .ID (deref $.Form.Calendar.DefaultCategoryID))}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Hours <span class="muted">(blank rows fall back to the account)</span></legend>
+
+    <label>Time zone (IANA)
+      <input type="text" name="tz" value="{{.Form.TZ}}" placeholder="America/Chicago">
+    </label>
+
+    <fieldset>
+      <legend>Working</legend>
+      {{range $.Days}}
+        <label>{{.Label}}
+          <input type="text" name="working_{{.Key}}" value="{{index $.Form.WorkingDays .Key}}" placeholder="">
+        </label>
+      {{end}}
+    </fieldset>
+
+    <fieldset>
+      <legend>Personal</legend>
+      {{range $.Days}}
+        <label>{{.Label}}
+          <input type="text" name="personal_{{.Key}}" value="{{index $.Form.PersonalDays .Key}}" placeholder="">
+        </label>
+      {{end}}
+    </fieldset>
+
+    <fieldset>
+      <legend>Meeting</legend>
+      {{range $.Days}}
+        <label>{{.Label}}
+          <input type="text" name="meeting_{{.Key}}" value="{{index $.Form.MeetingDays .Key}}" placeholder="">
+        </label>
+      {{end}}
+    </fieldset>
+  </fieldset>
+
+  <fieldset>
+    <legend>Buffers</legend>
+    <label class="checkbox">
+      <input type="checkbox" name="use_calendar_buffers" {{if .Form.BuffersFromCal}}checked{{end}}>
+      Override the global buffers for this calendar
+    </label>
+    <label>Task &amp; Habit breaks (minutes)
+      <input type="number" min="0" max="240" name="task_habit_break_minutes" value="{{.Form.Buffers.TaskHabitBreakMinutes}}">
+    </label>
+    <label>Decompression after meetings (minutes)
+      <input type="number" min="0" max="240" name="decompression_minutes" value="{{.Form.Buffers.DecompressionMinutes}}">
+    </label>
+    <label>Travel time (minutes) <span class="muted">(stored, not yet enforced)</span>
+      <input type="number" min="0" max="240" name="travel_minutes" value="{{.Form.Buffers.TravelMinutes}}">
+    </label>
+  </fieldset>
+
+  <div class="row" style="justify-content:flex-start;gap:.5rem">
+    <button type="submit">Save</button>
+    <a href="/accounts" class="button secondary">Cancel</a>
+  </div>
+</form>
+{{end}}

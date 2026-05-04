@@ -1,0 +1,59 @@
+name: Sync wiki/ to GitHub Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wiki/**"
+      - ".github/workflows/wiki-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror wiki/ into wiki repo
+        run: |
+          set -euo pipefail
+          shopt -s extglob
+          # Wipe everything except .git so deleted/renamed pages disappear.
+          find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r src/wiki/. wiki/
+          # Convenience symlink: GitHub renders Home.md as the wiki landing page.
+          if [ ! -f wiki/Home.md ]; then
+            echo "ERROR: wiki/Home.md is required" >&2
+            exit 1
+          fi
+
+      - name: Commit & push wiki changes
+        working-directory: wiki
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No wiki changes."
+            exit 0
+          fi
+          git add -A
+          git commit -m "Sync from ${{ github.sha }}"
+          git push

@@ -1,0 +1,44 @@
+{{define "body"}}
+<div class="row">
+<h1>{{if .Conversation.Title}}{{.Conversation.Title}}{{else}}(untitled){{end}}</h1>
+<a href="/assistant" class="button secondary">← All conversations</a>
+</div>
+
+<div class="chat">
+  {{range .Turns}}
+    {{if .Text}}
+    <div class="turn turn-{{.Role}}">
+      <div class="turn-role">{{.Role}}</div>
+      <div class="turn-body">{{.Text}}</div>
+    </div>
+    {{end}}
+  {{end}}
+</div>
+
+{{if .Pending}}
+<h2>Pending actions</h2>
+<p class="muted">The assistant proposed these. Nothing happens until you Apply.</p>
+{{range .Pending}}
+<div class="action-card">
+  <div><strong>{{.Description}}</strong></div>
+  <details>
+    <summary>Tool input</summary>
+    <pre><code>{{.InputPretty}}</code></pre>
+  </details>
+  <div class="row">
+    <form method="post" action="/assistant/{{$.Conversation.ID}}/actions/{{.ID}}/apply"><button type="submit">Apply</button></form>
+    <form method="post" action="/assistant/{{$.Conversation.ID}}/actions/{{.ID}}/reject"><button type="submit" class="danger">Reject</button></form>
+  </div>
+</div>
+{{end}}
+{{end}}
+
+{{if eq .Conversation.State "idle"}}
+<form method="post" action="/assistant/{{.Conversation.ID}}/message" class="stack">
+  <label>Reply
+    <textarea name="text" rows="3" required></textarea>
+  </label>
+  <div><button type="submit">Send</button></div>
+</form>
+{{end}}
+{{end}}

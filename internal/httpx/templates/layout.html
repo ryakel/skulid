@@ -3,33 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{.Title}} · calm-axolotl</title>
+<title>{{.Title}} · skulid</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
 <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
 <body>
-<header>
-  <a href="/" class="brand">calm-axolotl</a>
-  <nav>
-    <a href="/">Dashboard</a>
-    <a href="/accounts">Accounts</a>
-    <a href="/rules">Rules</a>
-    <a href="/blocks">Smart blocks</a>
-    <a href="/audit">Audit</a>
-    <a href="/settings">Settings</a>
-  </nav>
-  {{if .Session}}
+<div class="app">
+  <aside class="sidebar">
+    <a href="/" class="brand"><span class="mark"></span>skulid</a>
+
+    <div class="section-label">Plan</div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/planner">Planner</a>
+      <a href="/priorities">Priorities</a>
+      <a href="/tasks">Tasks</a>
+      <a href="/habits">Habits</a>
+      <a href="/blocks">Smart blocks</a>
+    </nav>
+
+    <div class="section-label">Sync</div>
+    <nav>
+      <a href="/rules">Rules</a>
+      <a href="/accounts">Accounts</a>
+    </nav>
+
+    <div class="section-label">Manage</div>
+    <nav>
+      {{if .Features.Assistant}}<a href="/assistant">Assistant</a>{{end}}
+      <a href="/audit">Audit</a>
+      <a href="/settings">Settings</a>
+    </nav>
+
+    {{if .Session}}
+    <div class="who">Signed in as<br><strong>{{.Session.Email}}</strong></div>
     <form method="post" action="/logout" class="inline">
-      <span class="muted">{{.Session.Email}}</span>
       <button type="submit" class="link">Log out</button>
     </form>
-  {{end}}
-</header>
-<main>
-  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
-  {{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
-  {{block "body" .}}{{end}}
-</main>
+    {{end}}
+  </aside>
+
+  <main>
+    {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
+    {{block "body" .}}{{end}}
+  </main>
+</div>
 </body>
 </html>{{end}}

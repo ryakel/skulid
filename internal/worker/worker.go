@@ -25,32 +25,46 @@ const (
 	channelRenewWhen = 24 * time.Hour
 	channelRenewTick = time.Hour
 	staleAfter       = 10 * time.Minute
+	aiCleanupTick    = 6 * time.Hour
+	maintenanceTick  = 6 * time.Hour
 )
 
 // Manager coordinates per-account work and the cross-cutting scheduler. Jobs
 // are fan-outs into per-account inboxes so a slow account never blocks others.
 type Manager struct {
-	pool       *pgxpool.Pool
-	accounts   *db.AccountRepo
-	calendars  *db.CalendarRepo
-	tokens     *db.SyncTokenRepo
-	rules      *db.SyncRuleRepo
-	blocks     *db.SmartBlockRepo
-	links      *db.EventLinkRepo
-	audit      *db.AuditRepo
-	clientFor  syncengine.ClientFor
-	engine     *syncengine.Engine
-	smartEngine *syncengine.SmartBlockEngine
+	pool        *pgxpool.Pool
+	accounts    *db.AccountRepo
+	calendars   *db.CalendarRepo
+	tokens      *db.SyncTokenRepo
+	rules       *db.SyncRuleRepo
+	blocks      *db.SmartBlockRepo
+	links       *db.EventLinkRepo
+	audit       *db.AuditRepo
+	clientFor   syncengine.ClientFor
+	engine      *syncengine.Engine
+	smartEngine  *syncengine.SmartBlockEngine
+	decompEngine *syncengine.DecompressionEngine // optional
+	scheduler    *syncengine.Scheduler           // optional; gates daily-maintenance tick
+	tasks        *db.TaskRepo
+	habits       *db.HabitRepo
 
 	externalURL string
 	log         *slog.Logger
 
+	// AI conversation cleanup. Both nil if the assistant feature is unused.
+	aiConversations *db.AIConversationRepo
+	aiMaxAge        time.Duration
+
 	mu      stdsync.Mutex
 	workers map[int64]*accountWorker
 
-	// Smart block recompute is debounced.
+	// Smart block recompute is debounced per smart_block.
 	debounceMu stdsync.Mutex
 	debounce   map[int64]*time.Timer
+
+	// Decompression recompute is debounced per calendar.
+	decompDebounceMu stdsync.Mutex
+	decompDebounce   map[int64]*time.Timer
 
 	stop chan struct{}
 }
@@ -79,9 +93,63 @@ func NewManager(pool *pgxpool.Pool,
 		smartEngine: smartEngine,
 		externalURL: externalURL,
 		log:         log,
-		workers:     map[int64]*accountWorker{},
-		debounce:    map[int64]*time.Timer{},
-		stop:        make(chan struct{}),
+		workers:        map[int64]*accountWorker{},
+		debounce:       map[int64]*time.Timer{},
+		decompDebounce: map[int64]*time.Timer{},
+		stop:           make(chan struct{}),
+	}
+}
+
+// SetDecompressionEngine wires in the decompression engine. Optional — when
+// not set, no decompress events are written and no decompression cleanup runs.
+func (m *Manager) SetDecompressionEngine(e *syncengine.DecompressionEngine) {
+	m.decompEngine = e
+}
+
+// SetMaintenanceDeps wires in the task/habit repos and scheduler so the
+// daily-maintenance tick can refresh placements as the horizon walks forward.
+// Without it, MaintenanceTick is a no-op.
+func (m *Manager) SetMaintenanceDeps(tasks *db.TaskRepo, habits *db.HabitRepo, sch *syncengine.Scheduler) {
+	m.tasks = tasks
+	m.habits = habits
+	m.scheduler = sch
+}
+
+// EnqueueDecompressionForCalendar debounces (15s) and recomputes decompress
+// events for the given calendar.
+func (m *Manager) EnqueueDecompressionForCalendar(calendarID int64) {
+	if m.decompEngine == nil {
+		return
+	}
+	m.decompDebounceMu.Lock()
+	defer m.decompDebounceMu.Unlock()
+	if t, ok := m.decompDebounce[calendarID]; ok {
+		t.Stop()
+	}
+	m.decompDebounce[calendarID] = time.AfterFunc(15*time.Second, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := m.decompEngine.Recompute(ctx, calendarID); err != nil {
+			m.log.Error("decompression recompute failed", "calendar_id", calendarID, "err", err)
+		}
+	})
+}
+
+// RecomputeAllDecompression runs the decompression engine across every
+// connected calendar — used by the manual button on Settings → Buffers.
+func (m *Manager) RecomputeAllDecompression(ctx context.Context) {
+	if m.decompEngine == nil {
+		return
+	}
+	cals, err := m.calendars.ListAll(ctx)
+	if err != nil {
+		m.log.Error("list calendars failed", "err", err)
+		return
+	}
+	for _, c := range cals {
+		if err := m.decompEngine.Recompute(ctx, c.ID); err != nil {
+			m.log.Warn("decompression recompute failed", "calendar_id", c.ID, "err", err)
+		}
 	}
 }
 
@@ -94,7 +162,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	for _, a := range accounts {
 		m.ensureWorker(a.ID)
 	}
-	go m.scheduler(ctx)
+	go m.runScheduler(ctx)
 	return nil
 }
 
@@ -159,6 +227,11 @@ func (m *Manager) debounceSmartBlock(blockID int64) {
 	})
 }
 
+// RecomputeBlock runs the smart-block engine synchronously against one block.
+func (m *Manager) RecomputeBlock(ctx context.Context, blockID int64) error {
+	return m.smartEngine.Recompute(ctx, blockID)
+}
+
 // RecomputeAllSmartBlocks runs every enabled smart block now (used at startup
 // and from the manual buttons in the UI).
 func (m *Manager) RecomputeAllSmartBlocks(ctx context.Context) {
@@ -177,16 +250,31 @@ func (m *Manager) RecomputeAllSmartBlocks(ctx context.Context) {
 	}
 }
 
-// scheduler runs the polling fallback and watch-channel renewal loops.
-func (m *Manager) scheduler(ctx context.Context) {
+// SetAIConversationCleanup wires in the AI conversations repo so the scheduler
+// can prune stale chats. Optional: if not called, no AI cleanup runs.
+func (m *Manager) SetAIConversationCleanup(repo *db.AIConversationRepo, maxAge time.Duration) {
+	m.aiConversations = repo
+	m.aiMaxAge = maxAge
+}
+
+// runScheduler runs the polling fallback, watch-channel renewal, AI
+// conversation cleanup, and the daily maintenance pass that keeps habit/task
+// placements fresh as the horizon walks forward.
+func (m *Manager) runScheduler(ctx context.Context) {
 	pollTicker := time.NewTicker(pollInterval)
 	renewTicker := time.NewTicker(channelRenewTick)
+	cleanupTicker := time.NewTicker(aiCleanupTick)
+	maintTicker := time.NewTicker(maintenanceTick)
 	defer pollTicker.Stop()
 	defer renewTicker.Stop()
+	defer cleanupTicker.Stop()
+	defer maintTicker.Stop()
 
-	// Run an initial pass shortly after startup so we don't wait 5 min for the first sync.
+	// Run an initial pass shortly after startup so we don't wait for the first ticks.
 	startup := time.NewTimer(15 * time.Second)
+	maintStartup := time.NewTimer(60 * time.Second)
 	defer startup.Stop()
+	defer maintStartup.Stop()
 
 	for {
 		select {
@@ -197,11 +285,87 @@ func (m *Manager) scheduler(ctx context.Context) {
 		case <-startup.C:
 			m.runPollPass(ctx)
 			m.runRenewPass(ctx)
+			m.runAICleanup(ctx)
+		case <-maintStartup.C:
+			m.runMaintenance(ctx)
 		case <-pollTicker.C:
 			m.runPollPass(ctx)
 		case <-renewTicker.C:
 			m.runRenewPass(ctx)
+		case <-cleanupTicker.C:
+			m.runAICleanup(ctx)
+		case <-maintTicker.C:
+			m.runMaintenance(ctx)
 		}
+	}
+}
+
+// runMaintenance refreshes scheduled placements:
+//
+//   - For every enabled habit, re-runs PlaceHabit so the rolling horizon
+//     extends as `today` advances.
+//   - For every task that's pending or whose scheduled window has already
+//     passed (the user procrastinated past the placement), re-runs PlaceTask
+//     so it lands on the next available slot.
+//
+// Heavy operation; gated behind SetMaintenanceDeps so test harnesses and
+// non-scheduler-using deployments stay quiet.
+func (m *Manager) runMaintenance(ctx context.Context) {
+	if m.scheduler == nil || m.habits == nil || m.tasks == nil {
+		return
+	}
+	now := time.Now()
+
+	hs, err := m.habits.ListEnabled(ctx)
+	if err != nil {
+		m.log.Error("maintenance list habits failed", "err", err)
+	} else {
+		for _, h := range hs {
+			if err := m.scheduler.PlaceHabit(ctx, h.ID); err != nil {
+				m.log.Warn("maintenance place habit failed", "habit_id", h.ID, "err", err)
+			}
+		}
+		if len(hs) > 0 {
+			m.log.Info("maintenance habits refreshed", "count", len(hs))
+		}
+	}
+
+	ts, err := m.tasks.ListAllActive(ctx)
+	if err != nil {
+		m.log.Error("maintenance list tasks failed", "err", err)
+		return
+	}
+	refreshed := 0
+	for _, t := range ts {
+		needsRefresh := t.Status == db.TaskPending
+		if t.Status == db.TaskScheduled && t.ScheduledEndsAt != nil && t.ScheduledEndsAt.Before(now) {
+			needsRefresh = true
+		}
+		if !needsRefresh {
+			continue
+		}
+		if err := m.scheduler.PlaceTask(ctx, t.ID); err != nil {
+			m.log.Warn("maintenance place task failed", "task_id", t.ID, "err", err)
+			continue
+		}
+		refreshed++
+	}
+	if refreshed > 0 {
+		m.log.Info("maintenance tasks refreshed", "count", refreshed)
+	}
+}
+
+func (m *Manager) runAICleanup(ctx context.Context) {
+	if m.aiConversations == nil || m.aiMaxAge <= 0 {
+		return
+	}
+	n, err := m.aiConversations.DeleteOlderThan(ctx, m.aiMaxAge)
+	if err != nil {
+		m.log.Error("ai cleanup failed", "err", err)
+		return
+	}
+	if n > 0 {
+		m.log.Info("ai cleanup", "deleted_conversations", n)
 	}
 }
 
@@ -381,5 +545,7 @@ func (w *accountWorker) syncCalendar(ctx context.Context, cli *calendar.Client, 
 	_ = w.mgr.calendars.MarkSynced(ctx, cal.ID, time.Now())
 	// Smart-block changes might be triggered by any event change on a source calendar.
 	w.mgr.EnqueueSmartBlocksForCalendar(ctx, cal.ID)
+	// Decompress events trail real meetings; refresh after every sync of this calendar.
+	w.mgr.EnqueueDecompressionForCalendar(cal.ID)
 	return nil
 }

@@ -1,0 +1,27 @@
+{{define "body"}}
+<div class="row">
+<h1>Buffers</h1>
+<a href="/settings" class="button secondary">← Back to settings</a>
+</div>
+
+<p class="muted">Padding the scheduler keeps around busy time when placing tasks and habits, plus visible "Decompress" events that the buffer engine writes after every non-managed meeting on your calendars. <strong>Travel time</strong> is reserved for a future release that's location-aware. Per-calendar overrides are configurable on each calendar's <a href="/accounts">Settings</a> page.</p>
+
+<form method="post" action="/settings/buffers/recompute" style="margin-bottom:1rem">
+  <button type="submit" class="secondary">Recompute decompress events now</button>
+</form>
+
+<form method="post" action="/settings/buffers" class="stack">
+  <label>Task &amp; Habit breaks (minutes)
+    <input type="number" min="0" max="240" name="task_habit_break_minutes" value="{{.Buffers.TaskHabitBreakMinutes}}">
+  </label>
+  <label>Decompression after meetings (minutes)
+    <input type="number" min="0" max="240" name="decompression_minutes" value="{{.Buffers.DecompressionMinutes}}">
+  </label>
+  <label>Travel time before &amp; after events (minutes) <span class="muted">(stored, not yet enforced)</span>
+    <input type="number" min="0" max="240" name="travel_minutes" value="{{.Buffers.TravelMinutes}}">
+  </label>
+  <div class="row" style="justify-content:flex-start;gap:.5rem">
+    <button type="submit">Save</button>
+  </div>
+</form>
+{{end}}

@@ -16,11 +16,31 @@ import (
 )
 
 const (
-	PropManaged       = "calmAxolotlManaged"
-	PropSourceEventID = "calmAxolotlSourceEventId"
-	PropRuleID        = "calmAxolotlRuleId"
-	PropSmartBlockID  = "calmAxolotlSmartBlockId"
+	PropManaged       = "skulidManaged"
+	PropSourceEventID = "skulidSourceEventId"
+	PropRuleID        = "skulidRuleId"
+	PropSmartBlockID  = "skulidSmartBlockId"
+	PropTaskID        = "skulidTaskId"
+	PropHabitID       = "skulidHabitId"
+	PropBufferType    = "skulidBufferType"       // "decompression" | "travel" (future)
+	PropBufferFor     = "skulidBufferForEventId" // Google ID of the meeting we trail
+
+	// Legacy keys from the pre-rename "calm-axolotl" era. Read-only — recognized
+	// by IsManaged() so any old managed event written under the previous name
+	// still gets the loop guard, but new writes only emit the new keys above.
+	legacyPropManaged = "calmAxolotlManaged"
 )
+
+// BufferProps fills the extendedProperties.private map for a buffer event
+// (e.g. Decompress). The owning meeting's Google event ID goes in
+// PropBufferFor so we can find the buffer back by source.
+func BufferProps(bufferType, sourceEventID string) map[string]string {
+	return map[string]string{
+		PropManaged:    "1",
+		PropBufferType: bufferType,
+		PropBufferFor:  sourceEventID,
+	}
+}
 
 type Client struct {
 	svc *calendar.Service
@@ -191,10 +211,27 @@ func SmartBlockProps(blockID int64) map[string]string {
 	}
 }
 
-// IsManaged reports whether an event was created by us.
+func TaskProps(taskID int64) map[string]string {
+	return map[string]string{
+		PropManaged: "1",
+		PropTaskID:  fmt.Sprintf("%d", taskID),
+	}
+}
+
+func HabitProps(habitID int64) map[string]string {
+	return map[string]string{
+		PropManaged: "1",
+		PropHabitID: fmt.Sprintf("%d", habitID),
+	}
+}
+
+// IsManaged reports whether an event was created by us. Recognizes both the
+// current "skulid*" keys and the legacy "calmAxolotl*" keys so events written
+// before the project rename still trip the loop guard.
 func IsManaged(ev *calendar.Event) bool {
 	if ev == nil || ev.ExtendedProperties == nil || ev.ExtendedProperties.Private == nil {
 		return false
 	}
-	return ev.ExtendedProperties.Private[PropManaged] == "1"
+	props := ev.ExtendedProperties.Private
+	return props[PropManaged] == "1" || props[legacyPropManaged] == "1"
 }

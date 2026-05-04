@@ -14,16 +14,29 @@ type Account struct {
 	AccessTokenExpiresAt  *time.Time
 	PrimaryCalendarID     string
 	CreatedAt             time.Time
+	// Per-account hour windows (Working / Personal / Meeting). All nullable JSON;
+	// readers should fall back: personal -> working -> default; meeting -> working.
+	WorkingHours          json.RawMessage
+	PersonalHours         json.RawMessage
+	MeetingHours          json.RawMessage
 }
 
 type Calendar struct {
-	ID               int64
-	AccountID        int64
-	GoogleCalendarID string
-	Summary          string
-	TimeZone         string
-	Color            string
-	LastSyncedAt     *time.Time
+	ID                int64
+	AccountID         int64
+	GoogleCalendarID  string
+	Summary           string
+	TimeZone          string
+	Color             string
+	LastSyncedAt      *time.Time
+	DefaultCategoryID *int64
+	// Per-calendar hour overrides. NULL means fall back to the owning account.
+	WorkingHours      json.RawMessage
+	PersonalHours     json.RawMessage
+	MeetingHours      json.RawMessage
+	// Per-calendar buffer override. Empty means fall back to the global
+	// `setting.buffers` row. Same comma-separated string format.
+	Buffers           string
 }
 
 type SyncToken struct {
@@ -51,6 +64,19 @@ type SyncRule struct {
 	BackfillDone       bool
 	Enabled            bool
 	CreatedAt          time.Time
+	// Optional category to pin the mirror event to. NULL means use the
+	// auto-categorizer at planner-render time.
+	CategoryID         *int64
+	// Visibility preset. One of: personal_commitment | busy_for_all |
+	// details_for_you_busy_others | details_for_you_and_access. Drives the
+	// engine's transform; the legacy Transform JSON is honored only when
+	// VisibilityMode is empty (it never is for new rules).
+	VisibilityMode     string
+	// One of: skip | only_busy | sync_all.
+	AllDayMode         string
+	// When true, only mirror events whose start time lies within the source
+	// account's Working hours.
+	WorkingHoursOnly   bool
 }
 
 type SmartBlock struct {
@@ -90,6 +116,64 @@ type ManagedBlock struct {
 	StartsAt         time.Time
 	EndsAt           time.Time
 	LastSyncedAt     time.Time
+}
+
+// Task priorities (matches Reclaim's Kanban columns).
+const (
+	PriorityCritical = "critical"
+	PriorityHigh     = "high"
+	PriorityMedium   = "medium"
+	PriorityLow      = "low"
+)
+
+// Task statuses.
+const (
+	TaskPending   = "pending"
+	TaskScheduled = "scheduled"
+	TaskCompleted = "completed"
+	TaskCancelled = "cancelled"
+)
+
+type Task struct {
+	ID                 int64
+	Title              string
+	Notes              string
+	Priority           string
+	DurationMinutes    int
+	DueAt              *time.Time
+	Status             string
+	TargetCalendarID   int64
+	CategoryID         *int64
+	ScheduledEventID   string
+	ScheduledStartsAt  *time.Time
+	ScheduledEndsAt    *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type Habit struct {
+	ID               int64
+	Title            string
+	DurationMinutes  int
+	IdealTime        string   // "HH:MM"
+	FlexMinutes      int
+	DaysOfWeek       []string // {"mon","tue",...}
+	HoursKind        string   // "working" | "personal" | "meeting"
+	TargetCalendarID int64
+	CategoryID       *int64
+	HorizonDays      int
+	Enabled          bool
+	CreatedAt        time.Time
+}
+
+type HabitOccurrence struct {
+	ID            int64
+	HabitID       int64
+	TargetEventID string
+	OccursOn      time.Time
+	StartsAt      time.Time
+	EndsAt        time.Time
+	LastSyncedAt  time.Time
 }
 
 type AuditEntry struct {
