@@ -64,9 +64,14 @@ See [Configuration](Configuration) for every supported variable.
 ## 3. Boot it
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 docker compose logs -f app
 ```
+
+This pulls the latest published image from
+[`ghcr.io/ryakel/skulid`](https://github.com/ryakel/skulid/pkgs/container/skulid).
+Pass `--build` to compile from source instead, or pin a release by
+adding `SKULID_TAG=v1.2.3` to your `.env`.
 
 Wait for `migrations applied` and `http server listening`. Visit
 `EXTERNAL_URL` in your browser.

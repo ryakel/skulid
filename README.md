@@ -38,18 +38,17 @@ git clone https://github.com/ryakel/skulid.git
 cd skulid
 cp .env.example .env
 # fill in EXTERNAL_URL, Google OAuth, SESSION_SECRET, ENCRYPTION_KEY
-docker compose up -d --build
+docker compose up -d
 ```
 
-Or pull the prebuilt multi-arch image straight from
-[GitHub Container Registry](https://github.com/ryakel/skulid/pkgs/container/skulid):
-
-```bash
-docker pull ghcr.io/ryakel/skulid:latest
-```
+`docker compose up -d` pulls the multi-arch image from
+[`ghcr.io/ryakel/skulid:latest`](https://github.com/ryakel/skulid/pkgs/container/skulid).
+To build from source instead, use `docker compose up -d --build`. To pin
+a release, set `SKULID_TAG=v1.2.3` in `.env`. To deploy from your own
+internal registry, set `SKULID_IMAGE=registry.home.lan/ryakel/skulid`.
 
 Tags `latest` and `vX.Y.Z` are published on every push to `main` by
-`.github/workflows/build-and-publish.yml`.
+[`.github/workflows/build-and-publish.yml`](./.github/workflows/build-and-publish.yml).
 
 Open `EXTERNAL_URL` in a browser, sign in with Google, you own the
 instance. Full walkthrough in

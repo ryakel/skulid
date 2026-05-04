@@ -36,10 +36,12 @@ The bundled `docker-compose.yml` reads:
 
 | Variable            | Default        | Used by                            |
 | ------------------- | -------------- | ---------------------------------- |
-| `POSTGRES_USER`     | `skulid`  | Postgres init + `DATABASE_URL`     |
-| `POSTGRES_PASSWORD` | `changeme`     | Postgres init + `DATABASE_URL`     |
-| `POSTGRES_DB`       | `skulid`  | Postgres init + `DATABASE_URL`     |
-| `HOST_PORT`         | `8567`         | Host port mapped to container 8567 |
+| `POSTGRES_USER`     | `skulid`              | Postgres init + `DATABASE_URL`     |
+| `POSTGRES_PASSWORD` | `changeme`            | Postgres init + `DATABASE_URL`     |
+| `POSTGRES_DB`       | `skulid`              | Postgres init + `DATABASE_URL`     |
+| `HOST_PORT`         | `8567`                | Host port mapped to container 8567 |
+| `SKULID_IMAGE`      | `ghcr.io/ryakel/skulid` | Image repo to pull (override for an internal registry) |
+| `SKULID_TAG`        | `latest`              | Image tag (pin to `vX.Y.Z` for a specific release) |
 
 ## Notes
 
