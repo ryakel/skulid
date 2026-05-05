@@ -15,14 +15,13 @@ services:
       retries: 5
 
   app:
-    # Default to the multi-arch image published by .github/workflows/build-and-publish.yml.
-    # Override SKULID_IMAGE / SKULID_TAG to point at an internal registry or pin a version.
-    # `docker compose up -d --build` rebuilds locally and tags the result with the same name.
+    # Pulled from a registry — nothing builds on the host. Override
+    # SKULID_IMAGE to point at an internal registry, SKULID_TAG to pin a
+    # release. For local development build the image directly with
+    # `docker build -t ghcr.io/ryakel/skulid:dev .` and then run with
+    # SKULID_TAG=dev.
     image: ${SKULID_IMAGE:-ghcr.io/ryakel/skulid}:${SKULID_TAG:-latest}
-    build:
-      context: .
-      args:
-        APP_VERSION: ${SKULID_TAG:-dev}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       db:
