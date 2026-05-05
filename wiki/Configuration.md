@@ -30,6 +30,33 @@ openssl rand -base64 32   # ENCRYPTION_KEY
 | `ANTHROPIC_API_KEY`  | unset (off)      | Enable the AI assistant; see [AI Assistant](AI-Assistant) |
 | `ANTHROPIC_MODEL`    | `claude-opus-4-7` | Model the assistant uses                    |
 
+## Development overrides
+
+These exist for UI mockup work without doing a real Google OAuth
+round-trip. **Never set in production** — the daemon logs a `WARN`
+at startup and every page renders a yellow `DEV AUTH BYPASS` banner
+when on, but it's still your responsibility to keep them out of
+prod env files.
+
+| Variable                  | Default     | Meaning                                                                 |
+| ------------------------- | ----------- | ----------------------------------------------------------------------- |
+| `SKULID_DEV_AUTH_BYPASS`  | unset (off) | Truthy (`1`/`true`/`yes`/`on`) registers `GET /dev/login`; hitting that route claims TOFU as `SKULID_DEV_USER_EMAIL` and issues a real session. |
+| `SKULID_DEV_USER_EMAIL`   | `dev@local` | Email recorded as the synthetic owner.                                  |
+
+In `docker-compose.yml`, set them in the `app` service `environment:` block (or a `.env` file at the repo root that compose reads automatically). They're just regular env vars — no special wiring beyond the daemon checking for them at startup.
+
+```yaml
+services:
+  app:
+    environment:
+      SKULID_DEV_AUTH_BYPASS: "1"
+      SKULID_DEV_USER_EMAIL: "dev@local"
+```
+
+After enabling, hit `https://your.host/dev/login` (or the "Skip OAuth →" link on the login page) to land on the dashboard.
+
+See [Development → Local setup](Development#local-setup) for the longer story on what this does and doesn't bypass.
+
 ## Postgres (compose)
 
 The bundled `docker-compose.yml` reads:
