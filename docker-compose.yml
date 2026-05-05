@@ -1,10 +1,21 @@
+# skulid — production compose. Pulls the published image from a registry;
+# nothing compiles here. Local development uses a manually-built dev image
+# (see README.md "Quick start").
+name: skulid
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-skulid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-skulid}
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -13,6 +24,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   app:
     # Pulled from a registry — nothing builds on the host. Override
@@ -27,7 +39,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
       LISTEN_ADDR: ":8567"
       EXTERNAL_URL: ${EXTERNAL_URL:?set EXTERNAL_URL to your public https URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID}
@@ -38,6 +50,7 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
     ports:
       - "${HOST_PORT:-8567}:8567"
+    logging: *default-logging
 
 volumes:
   db_data:
