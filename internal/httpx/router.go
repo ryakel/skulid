@@ -88,6 +88,7 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/", s.handleDashboard)
 		r.Get("/planner", s.handlePlannerPage)
+		r.Post("/settings/planner", s.handlePlannerPrefs)
 		r.Get("/priorities", s.handlePrioritiesPage)
 
 		r.Get("/accounts", s.handleAccountsPage)

@@ -346,6 +346,25 @@ table.categories input[type=color] {
 
 .planner-header { margin-bottom: 1rem; }
 
+.planner-prefs {
+  display: flex; align-items: end; gap: .75rem; flex-wrap: wrap;
+  padding: .65rem .85rem; margin-bottom: 1rem;
+  background: var(--surface-soft); border-radius: var(--radius-md);
+  font-size: .8rem;
+}
+.planner-prefs label {
+  display: flex; flex-direction: column; gap: .25rem; font-weight: 500;
+  color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+}
+.planner-prefs input,
+.planner-prefs select {
+  font: inherit; padding: .35rem .5rem; border: 1px solid var(--hairline);
+  border-radius: var(--radius-md); background: var(--canvas); color: var(--ink);
+  font-size: .82rem; min-width: 14rem;
+}
+.planner-prefs select { min-width: 10rem; }
+.planner-prefs button { padding: .4rem .85rem; }
+
 .planner-totals {
   display: flex; flex-wrap: wrap; gap: .35rem .9rem;
   padding: .75rem 1rem; margin-bottom: 1rem;
@@ -423,6 +442,10 @@ table.categories input[type=color] {
 }
 .planner-event .ev-title { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .planner-event .ev-meta  { color: var(--muted); font-size: .62rem; margin-top: .05rem; }
+.planner-event.is-short {
+  padding: .05rem .4rem; line-height: 1.05; font-size: .65rem;
+}
+.planner-event.is-short .ev-title { font-size: .65rem; }
 
 /* ------------------------------------------------------------------------- *
  * Priorities Kanban

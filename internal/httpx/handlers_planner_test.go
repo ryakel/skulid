@@ -5,6 +5,40 @@ import (
 	"time"
 )
 
+func TestPlannerWeekStartSnapsToConfiguredDay(t *testing.T) {
+	loc := time.UTC
+	// Wednesday, May 6 2026.
+	wed := time.Date(2026, 5, 6, 14, 30, 0, 0, loc)
+
+	cases := []struct {
+		weekStart int
+		want      string // "YYYY-MM-DD"
+	}{
+		{0, "2026-05-03"}, // Sunday
+		{1, "2026-05-04"}, // Monday (the previous case's old default)
+		{2, "2026-05-05"}, // Tuesday
+		{3, "2026-05-06"}, // Wednesday — same day, snap to itself
+		{4, "2026-04-30"}, // Thursday — previous Thursday
+		{5, "2026-05-01"}, // Friday
+		{6, "2026-05-02"}, // Saturday
+	}
+	for _, tc := range cases {
+		got := plannerWeekStart(wed, "", loc, tc.weekStart)
+		if g := got.Format("2006-01-02"); g != tc.want {
+			t.Errorf("weekStart=%d: got %s, want %s", tc.weekStart, g, tc.want)
+		}
+	}
+}
+
+func TestPlannerWeekStartInvalidDefaultsToMonday(t *testing.T) {
+	loc := time.UTC
+	wed := time.Date(2026, 5, 6, 0, 0, 0, 0, loc)
+	got := plannerWeekStart(wed, "", loc, 99) // out of range
+	if g := got.Format("2006-01-02"); g != "2026-05-04" {
+		t.Errorf("invalid weekStartDay should fall back to Monday, got %s", g)
+	}
+}
+
 // ev is a tiny helper that builds a plannerEvent at a given start/end on a
 // fixed reference date — keeps the table tests below readable.
 func ev(t *testing.T, startHHMM, endHHMM string) plannerEvent {

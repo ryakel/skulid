@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	gcal "google.golang.org/api/calendar/v3"
@@ -32,8 +34,16 @@ type plannerEvent struct {
 	CategorySlug  string
 	CategoryName  string
 	CategoryColor string
+	// CalendarColor drives the actual visual rendering — different calendars
+	// get visually distinct events. Falls back to the category color when a
+	// calendar has no color set.
+	CalendarColor string
+	CalendarName  string
 	TopPct        float64
 	HeightPct     float64
+	// Short marks events ≤ 30 min so the template renders without the meta
+	// line (which doesn't fit in tiny boxes).
+	Short         bool
 	// Lane / Lanes describe horizontal placement when events overlap. Lane is
 	// 0-indexed; Lanes is the cluster's max concurrent count. A solo event
 	// renders at Lane=0, Lanes=1 → full column width.
@@ -62,7 +72,8 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	loc := s.plannerLocation(ctx)
-	weekStart := plannerWeekStart(time.Now().In(loc), r.URL.Query().Get("w"), loc)
+	weekStartDay := s.plannerWeekStartDay(ctx)
+	weekStart := plannerWeekStart(time.Now().In(loc), r.URL.Query().Get("w"), loc, weekStartDay)
 	weekEnd := weekStart.AddDate(0, 0, 7)
 
 	cats, _ := s.Categories.List(ctx)
@@ -80,10 +91,14 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 
 	calendars, _ := s.Calendars.ListAll(ctx)
 
-	// Pull events per calendar in parallel-ish (sequential for simplicity).
+	// Pull events per calendar — skip disabled ones; they're meant to be off
+	// the planner entirely. Sequential for simplicity; ~20 cals is fine.
 	var allEvents []*gcal.Event
 	calByEvent := map[*gcal.Event]db.Calendar{}
 	for _, cal := range calendars {
+		if !cal.Enabled {
+			continue
+		}
 		cli, err := s.ClientFor(ctx, cal.AccountID)
 		if err != nil {
 			continue
@@ -118,7 +133,7 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		cat := catBySlug[slug]
 		isAllDay := ev.Start != nil && ev.Start.DateTime == "" && ev.Start.Date != ""
 		if isAllDay {
-			placeAllDay(days, ev, slug, cat.Name, cat.Color, loc)
+			placeAllDay(days, ev, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
 			continue
 		}
 		start, end, ok := timedBounds(ev, loc)
@@ -139,7 +154,7 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		}
 		totals[slug] += clipE.Sub(clipS).Hours()
 
-		placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, loc)
+		placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
 	}
 
 	// Sort each day's timed events and assign overlap lanes so concurrent
@@ -169,6 +184,16 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		hourLabels = append(hourLabels, formatHour(h))
 	}
 
+	type weekStartOpt struct {
+		Value int
+		Label string
+	}
+	weekStartOpts := make([]weekStartOpt, 7)
+	for i := 0; i < 7; i++ {
+		weekStartOpts[i] = weekStartOpt{Value: i, Label: weekDayNames[i]}
+	}
+	tzSetting, _, _ := s.Settings.Get(ctx, db.SettingPlannerTimezone)
+
 	data := s.pageData(r, "Planner")
 	data["WeekStart"] = weekStart
 	data["WeekStartLabel"] = weekStart.Format("Jan 2")
@@ -179,17 +204,69 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 	data["PrevWeek"] = weekStart.AddDate(0, 0, -7).Format("2006-01-02")
 	data["NextWeek"] = weekStart.AddDate(0, 0, 7).Format("2006-01-02")
 	data["TodayWeek"] = ""
+	data["TimeZone"] = loc.String()
+	data["TimeZoneSetting"] = tzSetting
+	data["WeekStartDay"] = weekStartDay
+	data["WeekStartOptions"] = weekStartOpts
 	s.render(w, "planner", data)
 }
 
+// handlePlannerPrefs saves the planner timezone + week-start preferences.
+// Both are validated; bad TZ values are rejected (rather than silently kept
+// and falling back to UTC at next render). Redirect back to /planner so the
+// user sees the new layout immediately.
+func (s *Server) handlePlannerPrefs(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	tz := strings.TrimSpace(r.FormValue("timezone"))
+	if tz != "" {
+		if _, err := time.LoadLocation(tz); err != nil {
+			http.Error(w, "invalid timezone (must be IANA, e.g. America/Chicago): "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.Settings.Set(r.Context(), db.SettingPlannerTimezone, tz); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	weekStart := strings.TrimSpace(r.FormValue("week_start"))
+	if weekStart != "" {
+		n, err := strconv.Atoi(weekStart)
+		if err != nil || n < 0 || n > 6 {
+			http.Error(w, "week_start must be 0..6 (Sun..Sat)", http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.Settings.Set(r.Context(), db.SettingPlannerWeekStart, weekStart); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/planner", http.StatusFound)
+}
+
+// weekDayName maps a 0..6 weekday to the display label used in the prefs
+// form. Sunday=0 per Go's time.Weekday.
+var weekDayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
+// plannerLocation resolves the timezone the planner renders in. Priority:
+//
+//  1. Explicit operator setting (`planner_timezone`, settable from the
+//     planner header form).
+//  2. First connected account's working-hours timezone.
+//  3. UTC.
 func (s *Server) plannerLocation(ctx context.Context) *time.Location {
-	// Prefer the first account's working-hours timezone; fall back to UTC.
+	if v, ok, _ := s.Settings.Get(ctx, db.SettingPlannerTimezone); ok && strings.TrimSpace(v) != "" {
+		if loc, err := time.LoadLocation(strings.TrimSpace(v)); err == nil {
+			return loc
+		}
+	}
 	accts, _ := s.Accounts.List(ctx)
 	for _, a := range accts {
 		if len(a.WorkingHours) == 0 {
 			continue
 		}
-		// minimal parse — only need the time_zone field.
 		var probe struct {
 			TimeZone string `json:"time_zone"`
 		}
@@ -202,21 +279,36 @@ func (s *Server) plannerLocation(ctx context.Context) *time.Location {
 	return time.UTC
 }
 
+// plannerWeekStartDay returns the configured week-start weekday (0=Sun..6=Sat).
+// Defaults to Monday (1) when unset/invalid.
+func (s *Server) plannerWeekStartDay(ctx context.Context) int {
+	v, ok, _ := s.Settings.Get(ctx, db.SettingPlannerWeekStart)
+	if !ok {
+		return 1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 0 || n > 6 {
+		return 1
+	}
+	return n
+}
+
 // plannerWeekStart parses the ?w=YYYY-MM-DD query param and snaps to the
-// previous Monday. With no param, snaps from "now".
-func plannerWeekStart(now time.Time, w string, loc *time.Location) time.Time {
+// most recent occurrence of weekStartDay (0=Sun..6=Sat). With no param,
+// snaps from "now".
+func plannerWeekStart(now time.Time, w string, loc *time.Location, weekStartDay int) time.Time {
 	if w != "" {
 		if t, err := time.ParseInLocation("2006-01-02", w, loc); err == nil {
 			now = t
 		}
 	}
-	// Go's time.Weekday: Sunday=0, Monday=1, ... Saturday=6. Snap to Monday.
-	wday := int(now.Weekday())
-	if wday == 0 {
-		wday = 7 // Sunday becomes day 7 so Mon-Sun ordering works.
+	if weekStartDay < 0 || weekStartDay > 6 {
+		weekStartDay = 1
 	}
+	wday := int(now.Weekday())
+	daysBack := (wday - weekStartDay + 7) % 7
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	return day.AddDate(0, 0, -(wday - 1))
+	return day.AddDate(0, 0, -daysBack)
 }
 
 func buildDays(weekStart time.Time, loc *time.Location) []plannerDay {
@@ -235,7 +327,7 @@ func buildDays(weekStart time.Time, loc *time.Location) []plannerDay {
 	return out
 }
 
-func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, catColor string, loc *time.Location) {
+func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, catColor, calColor, calName string, loc *time.Location) {
 	// Iterate days the event covers. For each day, clip to the planner window
 	// and emit a block; this handles overnight events cleanly.
 	for i := range days {
@@ -269,6 +361,13 @@ func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, c
 		}
 		topMins := visS.Sub(windowStart).Minutes()
 		heightMins := visE.Sub(visS).Minutes()
+		// Use calendar color when present (different calendars look distinct);
+		// fall back to category color so events still get tinted when a
+		// calendar has no color set.
+		eventColor := calColor
+		if eventColor == "" {
+			eventColor = catColor
+		}
 		days[i].Timed = append(days[i].Timed, plannerEvent{
 			Title:         title,
 			Start:         clipS,
@@ -278,13 +377,16 @@ func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, c
 			CategorySlug:  slug,
 			CategoryName:  catName,
 			CategoryColor: catColor,
+			CalendarColor: eventColor,
+			CalendarName:  calName,
 			TopPct:        100 * topMins / float64(plannerSpanMins),
 			HeightPct:     100 * heightMins / float64(plannerSpanMins),
+			Short:         clipE.Sub(clipS) <= 30*time.Minute,
 		})
 	}
 }
 
-func placeAllDay(days []plannerDay, ev *gcal.Event, slug, catName, catColor string, loc *time.Location) {
+func placeAllDay(days []plannerDay, ev *gcal.Event, slug, catName, catColor, calColor, calName string, loc *time.Location) {
 	if ev.Start == nil || ev.End == nil {
 		return
 	}
@@ -297,6 +399,10 @@ func placeAllDay(days []plannerDay, ev *gcal.Event, slug, catName, catColor stri
 		// Some all-day events arrive without an end; assume same day.
 		endDate = startDate.AddDate(0, 0, 1)
 	}
+	eventColor := calColor
+	if eventColor == "" {
+		eventColor = catColor
+	}
 	for i := range days {
 		d := days[i].Date
 		if !d.Before(startDate) && d.Before(endDate) {
@@ -305,6 +411,8 @@ func placeAllDay(days []plannerDay, ev *gcal.Event, slug, catName, catColor stri
 				CategorySlug:  slug,
 				CategoryName:  catName,
 				CategoryColor: catColor,
+				CalendarColor: eventColor,
+				CalendarName:  calName,
 			})
 		}
 	}
