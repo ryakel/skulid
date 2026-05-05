@@ -26,6 +26,7 @@ func (s *Server) pageData(r *http.Request, title string) map[string]any {
 			"Assistant": s.Agent != nil,
 		},
 		"DevAuthBypass": s.Cfg.DevAuthBypass,
+		"Version":       s.Version,
 	}
 	if sess, ok := auth.SessionFromContext(r.Context()); ok {
 		d["Session"] = sess

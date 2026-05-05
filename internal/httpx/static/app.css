@@ -123,6 +123,14 @@ pre code { display: block; padding: .65rem .85rem; overflow-x: auto; white-space
   color: #5b3500; border: 1px solid #f0c34a; font-weight: 600;
   font-size: .85rem; letter-spacing: .01em;
 }
+.app-footer {
+  margin-top: 3rem; padding: .85rem 0; border-top: 1px solid var(--border);
+  display: flex; gap: .5rem; align-items: center;
+  color: var(--muted); font-size: .75rem;
+}
+.app-footer code {
+  background: transparent; padding: 0; font-size: .75rem; color: var(--muted);
+}
 
 /* ------------------------------------------------------------------------- *
  * Cards & grid

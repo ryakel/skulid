@@ -146,6 +146,7 @@ func run(log *slog.Logger) error {
 
 	srv := &httpx.Server{
 		Cfg:            cfg,
+		Version:        appVersion,
 		Sealer:         sealer,
 		Sessions:       sessions,
 		OAuth:          oauth,

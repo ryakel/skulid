@@ -49,6 +49,11 @@
     {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
     {{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
     {{block "body" .}}{{end}}
+    <footer class="app-footer">
+      <span>skulid</span>
+      <span>·</span>
+      <code title="container build version">{{.Version}}</code>
+    </footer>
   </main>
 </div>
 </body>

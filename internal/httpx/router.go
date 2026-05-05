@@ -22,6 +22,10 @@ import (
 
 type Server struct {
 	Cfg            *config.Config
+	// Version is the build tag injected at compile time
+	// (`-ldflags "-X main.appVersion=..."`); rendered in the page footer
+	// so a user can tell which container build they're looking at.
+	Version        string
 	Sealer         *crypto.Sealer
 	Sessions       *auth.SessionManager
 	OAuth          *auth.OAuthProvider
