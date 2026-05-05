@@ -47,6 +47,9 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
+      # Dev-only: skip OAuth via /dev/login. Empty = off.
+      SKULID_DEV_AUTH_BYPASS: ${SKULID_DEV_AUTH_BYPASS:-}
+      SKULID_DEV_USER_EMAIL: ${SKULID_DEV_USER_EMAIL:-dev@local}
     ports:
       - "${HOST_PORT:-8567}:8567"
     logging: *default-logging
