@@ -27,11 +27,6 @@ services:
     logging: *default-logging
 
   app:
-    # Pulled from a registry — nothing builds on the host. Override
-    # SKULID_IMAGE to point at an internal registry, SKULID_TAG to pin a
-    # release. For local development build the image directly with
-    # `docker build -t ghcr.io/ryakel/skulid:dev .` and then run with
-    # SKULID_TAG=dev.
     image: ${SKULID_IMAGE:-ghcr.io/ryakel/skulid}:${SKULID_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
