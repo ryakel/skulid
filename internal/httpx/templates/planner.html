@@ -2,7 +2,7 @@
 <div class="row planner-header">
   <div>
     <h1 style="margin:0">Planner</h1>
-    <div class="muted">{{.WeekStartLabel}} – {{.WeekEndLabel}}</div>
+    <div class="muted">{{.WeekStartLabel}} – {{.WeekEndLabel}} · <code>{{.TimeZone}}</code></div>
   </div>
   <div class="row" style="gap:.5rem">
     <a class="button secondary" href="/planner?w={{.PrevWeek}}">← Prev</a>
@@ -10,6 +10,20 @@
     <a class="button secondary" href="/planner?w={{.NextWeek}}">Next →</a>
   </div>
 </div>
+
+<form method="post" action="/settings/planner" class="planner-prefs">
+  <label>Timezone
+    <input type="text" name="timezone" value="{{.TimeZoneSetting}}" placeholder="America/Chicago (defaults to first account's working hours)">
+  </label>
+  <label>Week starts
+    <select name="week_start">
+      {{range .WeekStartOptions}}
+        <option value="{{.Value}}" {{if eq .Value $.WeekStartDay}}selected{{end}}>{{.Label}}</option>
+      {{end}}
+    </select>
+  </label>
+  <button type="submit" class="secondary">Save</button>
+</form>
 
 <div class="planner-totals">
 {{range .CategoryTotals}}
@@ -36,8 +50,8 @@
     <div class="planner-allday-cell">
       {{range .AllDay}}
         <div class="planner-allday"
-             style="background:{{.CategoryColor}}1a; border-left:3px solid {{.CategoryColor}}; color:var(--ink)"
-             title="{{.Title}}">{{.Title}}</div>
+             style="background:{{.CalendarColor}}1a; border-left:3px solid {{.CalendarColor}}; color:var(--ink)"
+             title="{{.Title}} · {{.CalendarName}}">{{.Title}}</div>
       {{end}}
     </div>
   {{end}}
@@ -48,11 +62,11 @@
   {{range .Days}}
     <div class="planner-day {{if .IsToday}}is-today{{end}}">
       {{range .Timed}}
-        <div class="planner-event"
-             style="top:{{.TopPct}}%; height:{{.HeightPct}}%; left: calc({{.Lane}} * (100% / {{.Lanes}}) + 2px); width: calc((100% / {{.Lanes}}) - 4px); background:{{.CategoryColor}}1a; border-left-color:{{.CategoryColor}}"
-             title="{{.Title}} · {{.StartLabel}} · {{.DurationLabel}}">
+        <div class="planner-event {{if .Short}}is-short{{end}}"
+             style="top:{{.TopPct}}%; height:{{.HeightPct}}%; left: calc({{.Lane}} * (100% / {{.Lanes}}) + 2px); width: calc((100% / {{.Lanes}}) - 4px); background:{{.CalendarColor}}1a; border-left-color:{{.CalendarColor}}"
+             title="{{.Title}} · {{.StartLabel}} · {{.DurationLabel}} · {{.CalendarName}}">
           <div class="ev-title">{{.Title}}</div>
-          <div class="ev-meta">{{.StartLabel}} · {{.DurationLabel}}</div>
+          {{if not .Short}}<div class="ev-meta">{{.StartLabel}} · {{.DurationLabel}}</div>{{end}}
         </div>
       {{end}}
     </div>

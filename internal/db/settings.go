@@ -16,6 +16,11 @@ const (
 	// Buffer minutes — comma-separated `task_habit_break,decompression,travel`,
 	// e.g. "30,30,30". Single string so we don't need a new table for one row.
 	SettingBuffers        = "buffers"
+	// Planner preferences. PlannerTimezone is an IANA name (defaults to the
+	// first connected account's working-hours timezone, then UTC); the
+	// week-start is "0".."6" with Sunday=0 per Go's time.Weekday convention.
+	SettingPlannerTimezone = "planner_timezone"
+	SettingPlannerWeekStart = "planner_week_start"
 )
 
 type SettingRepo struct {
