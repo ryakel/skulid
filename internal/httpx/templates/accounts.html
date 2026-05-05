@@ -21,11 +21,23 @@
     <tr><td colspan="4" class="nested">
       <ul class="calendars">
       {{range .}}
-        <li>
+        <li class="cal-row {{if not .Enabled}}cal-row-disabled{{end}}">
           <span class="dot" style="background:{{.Color}}"></span>
           <strong>{{.Summary}}</strong>
           <span class="muted">{{.TimeZone}} · {{.GoogleCalendarID}}</span>
-          <a href="/calendars/{{.ID}}" class="muted" style="margin-left:auto">Settings →</a>
+          {{if not .Enabled}}<span class="cat-pill" style="background:#9ca3af;margin-left:.5rem">disabled</span>{{end}}
+          <span class="cal-row-actions">
+            <form method="post" action="/calendars/{{.ID}}/enabled" style="display:inline">
+              {{if .Enabled}}
+                <input type="hidden" name="enabled" value="0">
+                <button type="submit" class="secondary">Disable</button>
+              {{else}}
+                <input type="hidden" name="enabled" value="1">
+                <button type="submit">Enable</button>
+              {{end}}
+            </form>
+            <a href="/calendars/{{.ID}}" class="muted">Settings →</a>
+          </span>
         </li>
       {{end}}
       </ul>

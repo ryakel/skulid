@@ -16,7 +16,7 @@ func NewCalendarRepo(pool *pgxpool.Pool) *CalendarRepo { return &CalendarRepo{po
 
 const calendarSelectCols = `id, account_id, google_calendar_id, summary, time_zone, color,
 	last_synced_at, default_category_id,
-	working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb, buffers`
+	working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb, buffers, enabled`
 
 func (r *CalendarRepo) Upsert(ctx context.Context, accountID int64, googleID, summary, tz, color string) (int64, error) {
 	var id int64
@@ -107,13 +107,40 @@ func scanCalendar(row rowScanner) (*Calendar, error) {
 	var buffers *string
 	if err := row.Scan(&c.ID, &c.AccountID, &c.GoogleCalendarID, &c.Summary, &c.TimeZone, &c.Color,
 		&c.LastSyncedAt, &c.DefaultCategoryID,
-		&c.WorkingHours, &c.PersonalHours, &c.MeetingHours, &buffers); err != nil {
+		&c.WorkingHours, &c.PersonalHours, &c.MeetingHours, &buffers, &c.Enabled); err != nil {
 		return nil, err
 	}
 	if buffers != nil {
 		c.Buffers = *buffers
 	}
 	return &c, nil
+}
+
+// SetEnabled flips a calendar's enabled flag. Disabling stops sync + watch
+// renewal on the next pass; enabling lets the next polling tick pick it up.
+func (r *CalendarRepo) SetEnabled(ctx context.Context, id int64, enabled bool) error {
+	_, err := r.pool.Exec(ctx, `UPDATE calendar SET enabled = $2 WHERE id = $1`, id, enabled)
+	return err
+}
+
+// ListEnabledByAccount filters ListByAccount to enabled-only. Used by the
+// worker so disabled calendars skip the per-account sync queue.
+func (r *CalendarRepo) ListEnabledByAccount(ctx context.Context, accountID int64) ([]Calendar, error) {
+	rows, err := r.pool.Query(ctx, `SELECT `+calendarSelectCols+`
+		FROM calendar WHERE account_id = $1 AND enabled = TRUE ORDER BY summary`, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Calendar
+	for rows.Next() {
+		c, err := scanCalendar(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *c)
+	}
+	return out, rows.Err()
 }
 
 // EffectiveCalendarHours implements the override chain: per-calendar override,

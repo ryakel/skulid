@@ -37,6 +37,10 @@ type Calendar struct {
 	// Per-calendar buffer override. Empty means fall back to the global
 	// `setting.buffers` row. Same comma-separated string format.
 	Buffers           string
+	// Disabled calendars don't sync, don't renew watches, and don't show up in
+	// new sync rule / smart block / task / habit selectors. Existing references
+	// degrade gracefully — the engines see them as "no busy time".
+	Enabled           bool
 }
 
 type SyncToken struct {

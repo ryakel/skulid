@@ -279,6 +279,17 @@ type calendarOption struct {
 	ID           int64
 	Summary      string
 	AccountEmail string
+	Enabled      bool
+}
+
+// Label is what selectors render — appends "(disabled)" so a user editing an
+// existing rule knows the referenced calendar is dormant.
+func (o calendarOption) Label() string {
+	s := o.AccountEmail + " · " + o.Summary
+	if !o.Enabled {
+		s += " (disabled)"
+	}
+	return s
 }
 
 func (s *Server) calendarOptions(ctx context.Context) ([]calendarOption, map[int64]calendarOption, error) {
@@ -297,7 +308,7 @@ func (s *Server) calendarOptions(ctx context.Context) ([]calendarOption, map[int
 	out := make([]calendarOption, 0, len(cals))
 	idx := map[int64]calendarOption{}
 	for _, c := range cals {
-		opt := calendarOption{ID: c.ID, Summary: c.Summary, AccountEmail: byAcct[c.AccountID]}
+		opt := calendarOption{ID: c.ID, Summary: c.Summary, AccountEmail: byAcct[c.AccountID], Enabled: c.Enabled}
 		out = append(out, opt)
 		idx[c.ID] = opt
 	}

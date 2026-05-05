@@ -88,6 +88,12 @@ func (e *Engine) applyRule(ctx context.Context, rule db.SyncRule, ev *gcal.Event
 	if err != nil {
 		return fmt.Errorf("load target cal: %w", err)
 	}
+	// Either side disabled -> rule is dormant. The mirror stays as-is on
+	// Google; re-enabling either calendar resumes propagation on the next
+	// incoming event.
+	if !srcCal.Enabled || !tgtCal.Enabled {
+		return nil
+	}
 
 	// Build an effective rule key for event_link. We always store using the
 	// canonical (rule.id, source_event_id) — but for reverse passes we use a
