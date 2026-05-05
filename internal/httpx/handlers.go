@@ -78,6 +78,7 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 		"OwnerEmail":    owner,
 		"Error":         r.URL.Query().Get("error"),
 		"DevAuthBypass": s.Cfg.DevAuthBypass,
+		"Version":       s.Version,
 	}
 	s.render(w, "login", data)
 }

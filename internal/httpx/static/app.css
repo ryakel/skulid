@@ -131,6 +131,13 @@ pre code { display: block; padding: .65rem .85rem; overflow-x: auto; white-space
 .app-footer code {
   background: transparent; padding: 0; font-size: .75rem; color: var(--muted);
 }
+.login-footer {
+  display: flex; gap: .4rem; justify-content: center; margin-top: 1.5rem;
+  color: var(--muted); font-size: .72rem;
+}
+.login-footer code {
+  background: transparent; padding: 0; font-size: .72rem; color: var(--muted);
+}
 
 /* ------------------------------------------------------------------------- *
  * Cards & grid
