@@ -43,9 +43,15 @@ docker compose up -d
 
 `docker compose up -d` pulls the multi-arch image from
 [`ghcr.io/ryakel/skulid:latest`](https://github.com/ryakel/skulid/pkgs/container/skulid).
-To build from source instead, use `docker compose up -d --build`. To pin
-a release, set `SKULID_TAG=v1.2.3` in `.env`. To deploy from your own
-internal registry, set `SKULID_IMAGE=registry.home.lan/ryakel/skulid`.
+Pin a release with `SKULID_TAG=v1.2.3` in `.env`. Deploy from your own
+internal registry by setting `SKULID_IMAGE=registry.home.lan/ryakel/skulid`.
+
+For local development, build the image directly and point the tag at it:
+
+```bash
+docker build -t ghcr.io/ryakel/skulid:dev .
+SKULID_TAG=dev docker compose up -d
+```
 
 Tags `latest` and `vX.Y.Z` are published on every push to `main` by
 [`.github/workflows/build-and-publish.yml`](./.github/workflows/build-and-publish.yml).

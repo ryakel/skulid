@@ -70,8 +70,16 @@ docker compose logs -f app
 
 This pulls the latest published image from
 [`ghcr.io/ryakel/skulid`](https://github.com/ryakel/skulid/pkgs/container/skulid).
-Pass `--build` to compile from source instead, or pin a release by
-adding `SKULID_TAG=v1.2.3` to your `.env`.
+Pin a release by adding `SKULID_TAG=v1.2.3` to your `.env`. To deploy
+from an internal registry, set `SKULID_IMAGE=registry.home.lan/ryakel/skulid`.
+
+For local development with uncommitted changes, build the image
+directly and run with `SKULID_TAG=dev`:
+
+```bash
+docker build -t ghcr.io/ryakel/skulid:dev .
+SKULID_TAG=dev docker compose up -d
+```
 
 Wait for `migrations applied` and `http server listening`. Visit
 `EXTERNAL_URL` in your browser.
