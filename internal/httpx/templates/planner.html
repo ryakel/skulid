@@ -35,7 +35,9 @@
   {{range .Days}}
     <div class="planner-allday-cell">
       {{range .AllDay}}
-        <div class="planner-allday" style="background:{{.CategoryColor}}; color:#fff" title="{{.Title}}">{{.Title}}</div>
+        <div class="planner-allday"
+             style="background:{{.CategoryColor}}1a; border-left:3px solid {{.CategoryColor}}; color:var(--ink)"
+             title="{{.Title}}">{{.Title}}</div>
       {{end}}
     </div>
   {{end}}
@@ -47,7 +49,7 @@
     <div class="planner-day {{if .IsToday}}is-today{{end}}">
       {{range .Timed}}
         <div class="planner-event"
-             style="top:{{.TopPct}}%; height:{{.HeightPct}}%; background:{{.CategoryColor}}1a; border-left-color:{{.CategoryColor}}"
+             style="top:{{.TopPct}}%; height:{{.HeightPct}}%; left: calc({{.Lane}} * (100% / {{.Lanes}}) + 2px); width: calc((100% / {{.Lanes}}) - 4px); background:{{.CategoryColor}}1a; border-left-color:{{.CategoryColor}}"
              title="{{.Title}} · {{.StartLabel}} · {{.DurationLabel}}">
           <div class="ev-title">{{.Title}}</div>
           <div class="ev-meta">{{.StartLabel}} · {{.DurationLabel}}</div>
