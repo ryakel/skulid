@@ -28,7 +28,10 @@ services:
 
   app:
     image: ${SKULID_IMAGE:-ghcr.io/ryakel/skulid}:${SKULID_TAG:-latest}
-    pull_policy: always
+    build:
+      context: .
+      args:
+        APP_VERSION: ${SKULID_TAG:-dev}
     restart: unless-stopped
     depends_on:
       db:
