@@ -2,13 +2,19 @@
 <div class="row planner-header">
   <div>
     <h1 style="margin:0">Planner</h1>
-    <div class="muted">{{.WeekStartLabel}} – {{.WeekEndLabel}} · <code>{{.TimeZone}}</code></div>
+    <div class="muted">{{.RangeLabel}} · <code>{{.TimeZone}}</code></div>
   </div>
   <div class="row" style="gap:.5rem">
-    <a class="button secondary" href="/planner?w={{.PrevWeek}}">← Prev</a>
-    <a class="button secondary" href="/planner">Today</a>
-    <a class="button secondary" href="/planner?w={{.NextWeek}}">Next →</a>
+    <a class="button secondary" href="/planner?view={{.View}}&at={{.PrevAt}}">←</a>
+    <a class="button secondary" href="/planner?view={{.View}}">Today</a>
+    <a class="button secondary" href="/planner?view={{.View}}&at={{.NextAt}}">→</a>
   </div>
+</div>
+
+<div class="planner-view-pills">
+  {{range .ViewOptions}}
+    <a class="planner-view-pill {{if eq .Value $.View}}active{{end}}" href="/planner?view={{.Value}}">{{.Label}}</a>
+  {{end}}
 </div>
 
 <form method="post" action="/settings/planner" class="planner-prefs">
@@ -19,6 +25,14 @@
     <select name="week_start">
       {{range .WeekStartOptions}}
         <option value="{{.Value}}" {{if eq .Value $.WeekStartDay}}selected{{end}}>{{.Label}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>Default view
+    <select name="default_view">
+      <option value="" {{if eq .DefaultViewSetting ""}}selected{{end}}>Week (default)</option>
+      {{range .ViewOptions}}
+        <option value="{{.Value}}" {{if eq .Value $.DefaultViewSetting}}selected{{end}}>{{.Label}}</option>
       {{end}}
     </select>
   </label>
@@ -33,10 +47,18 @@
     <span class="muted">{{.Hours}}h</span>
   </div>
 {{end}}
-{{if not .CategoryTotals}}<div class="muted">No events on calendars this week.</div>{{end}}
+{{if not .CategoryTotals}}<div class="muted">No events on calendars in this range.</div>{{end}}
 </div>
 
-<div class="planner-grid">
+{{if eq .View "month"}}
+  {{template "planner_month" .}}
+{{else}}
+  {{template "planner_timeline" .}}
+{{end}}
+{{end}}
+
+{{define "planner_timeline"}}
+<div class="planner-grid" style="--cols: {{.DayCount}}">
   <div class="planner-corner"></div>
   {{range .Days}}
     <div class="planner-day-header {{if .IsToday}}is-today{{end}}">
@@ -71,5 +93,34 @@
       {{end}}
     </div>
   {{end}}
+</div>
+{{end}}
+
+{{define "planner_month"}}
+<div class="planner-month">
+  <div class="planner-month-header">
+    {{range .WeekHeader}}<div>{{.}}</div>{{end}}
+  </div>
+  <div class="planner-month-grid">
+    {{range .Days}}
+      <div class="planner-month-cell {{if .IsToday}}is-today{{end}} {{if not .InMonth}}out-of-month{{end}}">
+        <div class="planner-month-date">{{.DayNum}}</div>
+        <div class="planner-month-events">
+          {{range .AllDay}}
+            <div class="planner-month-event"
+                 style="background:{{.CalendarColor}}1a; border-left:3px solid {{.CalendarColor}}"
+                 title="{{.Title}} · {{.CalendarName}}">{{.Title}}</div>
+          {{end}}
+          {{range .Timed}}
+            <div class="planner-month-event timed"
+                 style="border-left:3px solid {{.CalendarColor}}"
+                 title="{{.Title}} · {{.StartLabel}} · {{.DurationLabel}} · {{.CalendarName}}">
+              <span class="muted">{{.StartLabel}}</span> {{.Title}}
+            </div>
+          {{end}}
+        </div>
+      </div>
+    {{end}}
+  </div>
 </div>
 {{end}}

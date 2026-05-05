@@ -25,6 +25,30 @@ const (
 	plannerTimeout   = 90 * time.Second
 )
 
+// PlannerView enumerates the supported view modes. Day/3-day/week share the
+// timeline template; month renders to a 6×7 grid.
+const (
+	ViewDay   = "day"
+	ViewThree = "3day"
+	ViewWeek  = "week"
+	ViewMonth = "month"
+)
+
+// dayCountForView returns the number of timeline columns for the timeline
+// views, or 0 for month (which is rendered as a separate grid).
+func dayCountForView(v string) int {
+	switch v {
+	case ViewDay:
+		return 1
+	case ViewThree:
+		return 3
+	case ViewMonth:
+		return 0
+	default:
+		return 7
+	}
+}
+
 type plannerEvent struct {
 	Title         string
 	Start         time.Time
@@ -55,7 +79,9 @@ type plannerDay struct {
 	Date      time.Time
 	Label     string // "Mon"
 	DateLabel string // "Apr 27"
+	DayNum    int    // day-of-month, used by month-grid cells
 	IsToday   bool
+	InMonth   bool   // true unless rendered in month view as a leading/trailing spillover cell
 	AllDay    []plannerEvent
 	Timed     []plannerEvent
 }
@@ -73,8 +99,14 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 
 	loc := s.plannerLocation(ctx)
 	weekStartDay := s.plannerWeekStartDay(ctx)
-	weekStart := plannerWeekStart(time.Now().In(loc), r.URL.Query().Get("w"), loc, weekStartDay)
-	weekEnd := weekStart.AddDate(0, 0, 7)
+	view := s.resolveView(ctx, r.URL.Query().Get("view"))
+	anchor := parseAnchor(r.URL.Query().Get("at"), loc)
+	// Backwards compat: an old `?w=` query still works for the week view.
+	if w := r.URL.Query().Get("w"); w != "" && view == ViewWeek {
+		anchor = parseAnchor(w, loc)
+	}
+
+	rangeStart, rangeEnd, prevAt, nextAt, label := computeViewWindow(view, anchor, loc, weekStartDay)
 
 	cats, _ := s.Categories.List(ctx)
 	catBySlug := map[string]db.Category{}
@@ -91,8 +123,7 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 
 	calendars, _ := s.Calendars.ListAll(ctx)
 
-	// Pull events per calendar — skip disabled ones; they're meant to be off
-	// the planner entirely. Sequential for simplicity; ~20 cals is fine.
+	// Pull events per calendar — skip disabled ones. Sequential; ~20 cals is fine.
 	var allEvents []*gcal.Event
 	calByEvent := map[*gcal.Event]db.Calendar{}
 	for _, cal := range calendars {
@@ -105,9 +136,9 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		}
 		resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
 			Context(ctx).SingleEvents(true).
-			TimeMin(weekStart.Format(time.RFC3339)).
-			TimeMax(weekEnd.Format(time.RFC3339)).
-			MaxResults(250).OrderBy("startTime").Do()
+			TimeMin(rangeStart.Format(time.RFC3339)).
+			TimeMax(rangeEnd.Format(time.RFC3339)).
+			MaxResults(500).OrderBy("startTime").Do()
 		if err != nil {
 			continue
 		}
@@ -117,8 +148,8 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build per-day buckets and weekly totals.
-	days := buildDays(weekStart, loc)
+	// Build per-day buckets across the visible range.
+	days := buildDays(rangeStart, rangeEnd, loc)
 	totals := map[string]float64{}
 	for _, ev := range allEvents {
 		if ev.Status == "cancelled" {
@@ -140,25 +171,23 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		// Skip events entirely outside the week (multi-week recurrences clipped).
-		if !end.After(weekStart) || !start.Before(weekEnd) {
+		// Skip events entirely outside the visible range.
+		if !end.After(rangeStart) || !start.Before(rangeEnd) {
 			continue
 		}
-		// Tally hour totals (clip to visible week).
 		clipS, clipE := start, end
-		if clipS.Before(weekStart) {
-			clipS = weekStart
+		if clipS.Before(rangeStart) {
+			clipS = rangeStart
 		}
-		if clipE.After(weekEnd) {
-			clipE = weekEnd
+		if clipE.After(rangeEnd) {
+			clipE = rangeEnd
 		}
 		totals[slug] += clipE.Sub(clipS).Hours()
 
 		placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
 	}
 
-	// Sort each day's timed events and assign overlap lanes so concurrent
-	// events render side-by-side instead of stacking unreadably.
+	// Sort each day's timed events and assign overlap lanes.
 	for i := range days {
 		sort.Slice(days[i].Timed, func(a, b int) bool {
 			return days[i].Timed[a].Start.Before(days[i].Timed[b].Start)
@@ -193,22 +222,102 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		weekStartOpts[i] = weekStartOpt{Value: i, Label: weekDayNames[i]}
 	}
 	tzSetting, _, _ := s.Settings.Get(ctx, db.SettingPlannerTimezone)
+	defaultViewSetting, _, _ := s.Settings.Get(ctx, db.SettingPlannerDefaultView)
+
+	// Month view needs a 7-cell weekday header keyed off weekStartDay.
+	weekHeader := make([]string, 7)
+	for i := 0; i < 7; i++ {
+		weekHeader[i] = weekDayShortNames[(weekStartDay+i)%7]
+	}
 
 	data := s.pageData(r, "Planner")
-	data["WeekStart"] = weekStart
-	data["WeekStartLabel"] = weekStart.Format("Jan 2")
-	data["WeekEndLabel"] = weekEnd.AddDate(0, 0, -1).Format("Jan 2, 2006")
+	data["View"] = view
+	data["DayCount"] = dayCountForView(view)
+	data["RangeStart"] = rangeStart
+	data["RangeLabel"] = label
 	data["Days"] = days
 	data["HourLabels"] = hourLabels
 	data["CategoryTotals"] = catTotals
-	data["PrevWeek"] = weekStart.AddDate(0, 0, -7).Format("2006-01-02")
-	data["NextWeek"] = weekStart.AddDate(0, 0, 7).Format("2006-01-02")
-	data["TodayWeek"] = ""
+	data["PrevAt"] = prevAt.Format("2006-01-02")
+	data["NextAt"] = nextAt.Format("2006-01-02")
 	data["TimeZone"] = loc.String()
 	data["TimeZoneSetting"] = tzSetting
 	data["WeekStartDay"] = weekStartDay
 	data["WeekStartOptions"] = weekStartOpts
+	data["DefaultViewSetting"] = defaultViewSetting
+	data["WeekHeader"] = weekHeader
+	data["ViewOptions"] = []struct{ Value, Label string }{
+		{ViewDay, "Day"},
+		{ViewThree, "3 days"},
+		{ViewWeek, "Week"},
+		{ViewMonth, "Month"},
+	}
 	s.render(w, "planner", data)
+}
+
+// resolveView returns the requested view, falling back to the persisted
+// default and then "week". Unknown values get clamped to "week".
+func (s *Server) resolveView(ctx context.Context, q string) string {
+	v := strings.TrimSpace(q)
+	if v == "" {
+		v, _, _ = s.Settings.Get(ctx, db.SettingPlannerDefaultView)
+		v = strings.TrimSpace(v)
+	}
+	switch v {
+	case ViewDay, ViewThree, ViewWeek, ViewMonth:
+		return v
+	}
+	return ViewWeek
+}
+
+// parseAnchor reads a YYYY-MM-DD anchor in the planner's timezone, or returns
+// today (in that timezone) when the input is empty/unparseable.
+func parseAnchor(s string, loc *time.Location) time.Time {
+	if s != "" {
+		if t, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
+			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+		}
+	}
+	now := time.Now().In(loc)
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+}
+
+// computeViewWindow returns the [start, end) range to fetch events for, the
+// prev/next anchor dates for the navigation buttons, and a human label for
+// the page header. start is always at 00:00 in loc; end is exclusive.
+func computeViewWindow(view string, anchor time.Time, loc *time.Location, weekStartDay int) (start, end, prev, next time.Time, label string) {
+	switch view {
+	case ViewDay:
+		start = anchor
+		end = anchor.AddDate(0, 0, 1)
+		prev = anchor.AddDate(0, 0, -1)
+		next = anchor.AddDate(0, 0, 1)
+		label = anchor.Format("Mon, Jan 2, 2006")
+	case ViewThree:
+		start = anchor
+		end = anchor.AddDate(0, 0, 3)
+		prev = anchor.AddDate(0, 0, -3)
+		next = anchor.AddDate(0, 0, 3)
+		label = anchor.Format("Jan 2") + " – " + anchor.AddDate(0, 0, 2).Format("Jan 2, 2006")
+	case ViewMonth:
+		// 6×7 grid spanning the month containing `anchor`. Pre-roll back to the
+		// nearest weekStartDay before the 1st so the grid lines up.
+		monthStart := time.Date(anchor.Year(), anchor.Month(), 1, 0, 0, 0, 0, loc)
+		wday := int(monthStart.Weekday())
+		preroll := (wday - weekStartDay + 7) % 7
+		start = monthStart.AddDate(0, 0, -preroll)
+		end = start.AddDate(0, 0, 42)
+		prev = monthStart.AddDate(0, -1, 0)
+		next = monthStart.AddDate(0, 1, 0)
+		label = monthStart.Format("January 2006")
+	default: // ViewWeek
+		start = plannerWeekStart(anchor, "", loc, weekStartDay)
+		end = start.AddDate(0, 0, 7)
+		prev = start.AddDate(0, 0, -7)
+		next = start.AddDate(0, 0, 7)
+		label = start.Format("Jan 2") + " – " + end.AddDate(0, 0, -1).Format("Jan 2, 2006")
+	}
+	return
 }
 
 // handlePlannerPrefs saves the planner timezone + week-start preferences.
@@ -243,12 +352,24 @@ func (s *Server) handlePlannerPrefs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	defaultView := strings.TrimSpace(r.FormValue("default_view"))
+	switch defaultView {
+	case "", ViewDay, ViewThree, ViewWeek, ViewMonth:
+	default:
+		http.Error(w, "default_view must be one of: day, 3day, week, month", http.StatusBadRequest)
+		return
+	}
+	if err := s.Settings.Set(r.Context(), db.SettingPlannerDefaultView, defaultView); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, "/planner", http.StatusFound)
 }
 
 // weekDayName maps a 0..6 weekday to the display label used in the prefs
 // form. Sunday=0 per Go's time.Weekday.
 var weekDayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+var weekDayShortNames = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 
 // plannerLocation resolves the timezone the planner renders in. Priority:
 //
@@ -311,18 +432,31 @@ func plannerWeekStart(now time.Time, w string, loc *time.Location, weekStartDay 
 	return day.AddDate(0, 0, -daysBack)
 }
 
-func buildDays(weekStart time.Time, loc *time.Location) []plannerDay {
-	out := make([]plannerDay, 7)
+// buildDays builds one plannerDay per calendar day in [start, end). Used for
+// every view — day (1 day), 3-day (3), week (7), month (42).
+func buildDays(start, end time.Time, loc *time.Location) []plannerDay {
 	today := time.Now().In(loc)
 	todayStart := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)
-	for i := 0; i < 7; i++ {
-		d := weekStart.AddDate(0, 0, i)
-		out[i] = plannerDay{
+	// Use the anchor month to stamp `InMonth` for month-view cells. For
+	// timeline views the flag is unused and stays true.
+	anchorMonth := start.Month()
+	if end.Sub(start) > 8*24*time.Hour {
+		// Month view spans 42 days; use the middle of the range to identify
+		// the "current" month (so month-spillover at start/end is correctly
+		// flagged out-of-month).
+		mid := start.Add(end.Sub(start) / 2)
+		anchorMonth = mid.Month()
+	}
+	var out []plannerDay
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		out = append(out, plannerDay{
 			Date:      d,
 			Label:     d.Format("Mon"),
 			DateLabel: d.Format("Jan 2"),
+			DayNum:    d.Day(),
 			IsToday:   d.Equal(todayStart),
-		}
+			InMonth:   d.Month() == anchorMonth,
+		})
 	}
 	return out
 }
