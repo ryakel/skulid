@@ -34,6 +34,11 @@ type plannerEvent struct {
 	CategoryColor string
 	TopPct        float64
 	HeightPct     float64
+	// Lane / Lanes describe horizontal placement when events overlap. Lane is
+	// 0-indexed; Lanes is the cluster's max concurrent count. A solo event
+	// renders at Lane=0, Lanes=1 → full column width.
+	Lane          int
+	Lanes         int
 }
 
 type plannerDay struct {
@@ -137,11 +142,13 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, loc)
 	}
 
-	// Sort each day's timed events for stable rendering.
+	// Sort each day's timed events and assign overlap lanes so concurrent
+	// events render side-by-side instead of stacking unreadably.
 	for i := range days {
 		sort.Slice(days[i].Timed, func(a, b int) bool {
 			return days[i].Timed[a].Start.Before(days[i].Timed[b].Start)
 		})
+		assignEventLanes(days[i].Timed)
 	}
 
 	// Build the totals strip in category sort order.
@@ -326,6 +333,59 @@ func defaultCategorySlug(cal db.Calendar, byID map[string]db.Category) string {
 	_ = cal
 	_ = byID
 	return ""
+}
+
+// assignEventLanes lays overlapping events out in side-by-side lanes within
+// each "cluster" of transitively-overlapping events. Standard calendar
+// algorithm: sweep through start-sorted events, group anything that overlaps
+// the running cluster end into a cluster, then greedy-assign each event to
+// the first lane whose previous event has already ended. Cluster width =
+// max concurrent lanes; every event in the cluster gets that count so the
+// CSS width math works.
+func assignEventLanes(events []plannerEvent) {
+	if len(events) == 0 {
+		return
+	}
+	flush := func(start, end int) {
+		var laneEnds []time.Time
+		for k := start; k < end; k++ {
+			placed := -1
+			for li, le := range laneEnds {
+				if !le.After(events[k].Start) {
+					placed = li
+					laneEnds[li] = events[k].End
+					break
+				}
+			}
+			if placed == -1 {
+				placed = len(laneEnds)
+				laneEnds = append(laneEnds, events[k].End)
+			}
+			events[k].Lane = placed
+		}
+		total := len(laneEnds)
+		if total < 1 {
+			total = 1
+		}
+		for k := start; k < end; k++ {
+			events[k].Lanes = total
+		}
+	}
+
+	clusterStart := 0
+	clusterEnd := events[0].End
+	for i := 1; i < len(events); i++ {
+		if events[i].Start.Before(clusterEnd) {
+			if events[i].End.After(clusterEnd) {
+				clusterEnd = events[i].End
+			}
+			continue
+		}
+		flush(clusterStart, i)
+		clusterStart = i
+		clusterEnd = events[i].End
+	}
+	flush(clusterStart, len(events))
 }
 
 func formatHour(h int) string {

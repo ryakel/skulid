@@ -414,10 +414,12 @@ table.categories input[type=color] {
 .planner-day.is-today { background-color: rgba(17,17,17,.015); }
 
 .planner-event {
-  position: absolute; left: 3px; right: 3px;
+  position: absolute;
+  /* left + width are set inline by the lane layout in handlers_planner.go */
   border-radius: var(--radius-sm); padding: .2rem .45rem; font-size: .7rem;
   border-left: 3px solid var(--ink); background: rgba(17,17,17,.05);
   overflow: hidden; line-height: 1.2;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.5); /* subtle separator between adjacent lanes */
 }
 .planner-event .ev-title { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .planner-event .ev-meta  { color: var(--muted); font-size: .62rem; margin-top: .05rem; }
