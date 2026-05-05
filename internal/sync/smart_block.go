@@ -47,6 +47,12 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 	if err != nil {
 		return err
 	}
+	if !tgtCal.Enabled {
+		// Disabled target calendar — leave existing managed blocks alone
+		// (they'll get reaped when the user re-enables and the next recompute
+		// runs against fresh freebusy).
+		return nil
+	}
 	tgtClient, err := s.clientFor(ctx, tgtCal.AccountID)
 	if err != nil {
 		return err
@@ -75,6 +81,10 @@ func (s *SmartBlockEngine) Recompute(ctx context.Context, blockID int64) error {
 		srcCal, err := s.calendars.Get(ctx, srcID)
 		if err != nil {
 			s.log.Warn("smart block source cal missing", "cal_id", srcID, "err", err)
+			continue
+		}
+		if !srcCal.Enabled {
+			// Disabled source contributes no busy time.
 			continue
 		}
 		srcClient, err := s.clientFor(ctx, srcCal.AccountID)

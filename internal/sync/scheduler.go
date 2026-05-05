@@ -62,6 +62,11 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	if err != nil {
 		return err
 	}
+	if !cal.Enabled {
+		// Target calendar disabled — leave the task pending so it gets
+		// re-placed once the calendar is re-enabled.
+		return nil
+	}
 	cli, err := s.clientFor(ctx, cal.AccountID)
 	if err != nil {
 		return err
@@ -250,6 +255,11 @@ func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
 	cal, err := s.calendars.Get(ctx, h.TargetCalendarID)
 	if err != nil {
 		return err
+	}
+	if !cal.Enabled {
+		// Target calendar disabled — skip placement and let the maintenance
+		// tick retry once the calendar is back on.
+		return nil
 	}
 	cli, err := s.clientFor(ctx, cal.AccountID)
 	if err != nil {

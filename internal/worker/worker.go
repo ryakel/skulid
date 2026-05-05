@@ -397,7 +397,9 @@ func (m *Manager) runRenewPass(ctx context.Context) {
 }
 
 // RegisterWatch (re-)registers a Google push channel for a calendar. It stops
-// any previous channel first to avoid stale subscriptions.
+// any previous channel first to avoid stale subscriptions. Disabled calendars
+// short-circuit and have their existing watch (if any) stopped — keeps Google
+// from billing notifications we'll just throw away.
 func (m *Manager) RegisterWatch(ctx context.Context, accountID, calendarID int64) error {
 	if m.externalURL == "" {
 		return errors.New("EXTERNAL_URL not set")
@@ -411,6 +413,13 @@ func (m *Manager) RegisterWatch(ctx context.Context, accountID, calendarID int64
 		return err
 	}
 	prior, _ := m.tokens.Get(ctx, accountID, calendarID)
+	if !cal.Enabled {
+		if prior != nil && prior.WatchChannelID != "" {
+			_ = cli.StopChannel(ctx, prior.WatchChannelID, prior.WatchResourceID)
+			_ = m.tokens.ClearWatch(ctx, accountID, calendarID)
+		}
+		return nil
+	}
 	if prior != nil && prior.WatchChannelID != "" {
 		_ = cli.StopChannel(ctx, prior.WatchChannelID, prior.WatchResourceID)
 	}
@@ -491,9 +500,16 @@ func (w *accountWorker) process(ctx context.Context, j Job) error {
 		if err != nil {
 			return err
 		}
+		// Single-calendar jobs from the webhook handler can fire for a
+		// disabled calendar (the watch may still have a few minutes of TTL
+		// after toggle-off). Drop the work loudly enough to debug.
+		if !c.Enabled {
+			w.mgr.log.Debug("skipping sync of disabled calendar", "cal_id", c.ID)
+			return nil
+		}
 		calendars = append(calendars, *c)
 	} else {
-		all, err := w.mgr.calendars.ListByAccount(ctx, j.AccountID)
+		all, err := w.mgr.calendars.ListEnabledByAccount(ctx, j.AccountID)
 		if err != nil {
 			return err
 		}

@@ -96,6 +96,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/accounts/{id}/delete", s.handleAccountDelete)
 		r.Get("/calendars/{id}", s.handleCalendarSettings)
 		r.Post("/calendars/{id}", s.handleCalendarSettingsSave)
+		r.Post("/calendars/{id}/enabled", s.handleCalendarToggleEnabled)
 
 		r.Get("/rules", s.handleRulesPage)
 		r.Get("/rules/new", s.handleRuleEditPage)

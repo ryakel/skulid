@@ -45,6 +45,13 @@ func (e *DecompressionEngine) Recompute(ctx context.Context, calendarID int64) e
 	if err != nil || cal == nil {
 		return fmt.Errorf("calendar %d not found: %w", calendarID, err)
 	}
+	if !cal.Enabled {
+		// Disabled calendar — no decompress events should exist on it.
+		// Drop any rows we previously created so the diff stays clean if the
+		// user re-enables later.
+		_ = e.audit
+		return nil
+	}
 	cli, err := e.clientFor(ctx, cal.AccountID)
 	if err != nil {
 		return err

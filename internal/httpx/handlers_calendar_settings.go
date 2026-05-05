@@ -1,9 +1,11 @@
 package httpx
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -128,4 +130,46 @@ func accountEmail(a *db.Account) string {
 		return ""
 	}
 	return a.Email
+}
+
+// handleCalendarToggleEnabled flips the calendar's enabled flag. When turning
+// off, also tears down the watch channel so Google stops billing notifications
+// we'd just discard. When turning on, kicks the worker to re-register the
+// watch and run the next sync.
+func (s *Server) handleCalendarToggleEnabled(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	cal, err := s.Calendars.Get(r.Context(), id)
+	if err != nil || cal == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	enabled := r.FormValue("enabled") == "1"
+	if err := s.Calendars.SetEnabled(r.Context(), id, enabled); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Re-registering the watch handles both directions: the manager
+	// short-circuits and tears down the existing channel for disabled
+	// calendars; for newly-enabled ones it issues a fresh one.
+	go func(accountID, calID int64) {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		if err := s.Worker.RegisterWatch(ctx, accountID, calID); err != nil {
+			s.Log.Warn("watch toggle on enable change failed", "cal_id", calID, "err", err)
+		}
+	}(cal.AccountID, id)
+	if enabled {
+		// Immediately enqueue a sync so the user sees fresh events without
+		// waiting for the 5-minute polling tick.
+		s.Worker.EnqueueCalendar(cal.AccountID, id)
+	}
+	http.Redirect(w, r, "/accounts", http.StatusFound)
 }
