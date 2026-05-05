@@ -28,10 +28,7 @@ services:
 
   app:
     image: ${SKULID_IMAGE:-ghcr.io/ryakel/skulid}:${SKULID_TAG:-latest}
-    build:
-      context: .
-      args:
-        APP_VERSION: ${SKULID_TAG:-dev}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       db:
@@ -40,8 +37,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
       LISTEN_ADDR: ":8567"
       # All values below have dev placeholders so the stack boots without .env
-      # for build / smoke testing. Replace with real values before connecting
-      # any actual Google account — the OAuth round-trip won't work otherwise.
+      # for smoke testing. Replace with real values before connecting any actual
+      # Google account — the OAuth round-trip won't work otherwise.
       EXTERNAL_URL: ${EXTERNAL_URL:-http://localhost:8567}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev}
