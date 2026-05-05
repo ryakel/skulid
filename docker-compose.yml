@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-skulid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-skulid}
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -34,13 +34,17 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
       LISTEN_ADDR: ":8567"
-      EXTERNAL_URL: ${EXTERNAL_URL:?set EXTERNAL_URL to your public https URL}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET}
-      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (any random string >=32 chars)}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (base64 of 32 random bytes)}
+      # All values below have dev placeholders so the stack boots without .env
+      # for build / smoke testing. Replace with real values before connecting
+      # any actual Google account — the OAuth round-trip won't work otherwise.
+      EXTERNAL_URL: ${EXTERNAL_URL:-http://localhost:8567}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-do-not-use-in-production-please-rotate}
+      # base64 of 32 zero bytes; fine for local boot, NEVER use in prod.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
     ports:
