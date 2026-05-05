@@ -39,6 +39,61 @@ func TestPlannerWeekStartInvalidDefaultsToMonday(t *testing.T) {
 	}
 }
 
+func TestComputeViewWindow(t *testing.T) {
+	loc := time.UTC
+	// Wednesday May 6 2026 as the anchor for every case.
+	anchor := time.Date(2026, 5, 6, 0, 0, 0, 0, loc)
+	const weekStartMonday = 1
+
+	t.Run("day", func(t *testing.T) {
+		start, end, prev, next, _ := computeViewWindow(ViewDay, anchor, loc, weekStartMonday)
+		if start.Format("2006-01-02") != "2026-05-06" {
+			t.Errorf("start=%s want 2026-05-06", start.Format("2006-01-02"))
+		}
+		if end.Sub(start) != 24*time.Hour {
+			t.Errorf("day range should be 24h, got %v", end.Sub(start))
+		}
+		if prev.Format("2006-01-02") != "2026-05-05" || next.Format("2006-01-02") != "2026-05-07" {
+			t.Errorf("prev/next: got %s / %s", prev.Format("2006-01-02"), next.Format("2006-01-02"))
+		}
+	})
+
+	t.Run("3day", func(t *testing.T) {
+		start, end, prev, next, _ := computeViewWindow(ViewThree, anchor, loc, weekStartMonday)
+		if end.Sub(start) != 3*24*time.Hour {
+			t.Errorf("3day range should be 72h, got %v", end.Sub(start))
+		}
+		if prev.Format("2006-01-02") != "2026-05-03" || next.Format("2006-01-02") != "2026-05-09" {
+			t.Errorf("prev/next: got %s / %s", prev.Format("2006-01-02"), next.Format("2006-01-02"))
+		}
+	})
+
+	t.Run("week", func(t *testing.T) {
+		start, end, _, _, _ := computeViewWindow(ViewWeek, anchor, loc, weekStartMonday)
+		// Anchor is Wed; weekStart=Mon → snap to 2026-05-04.
+		if start.Format("2006-01-02") != "2026-05-04" {
+			t.Errorf("week-Monday start=%s want 2026-05-04", start.Format("2006-01-02"))
+		}
+		if end.Sub(start) != 7*24*time.Hour {
+			t.Errorf("week range should be 7d, got %v", end.Sub(start))
+		}
+	})
+
+	t.Run("month", func(t *testing.T) {
+		start, end, prev, next, _ := computeViewWindow(ViewMonth, anchor, loc, weekStartMonday)
+		// May 2026 starts on a Friday. Monday-week → preroll back to Apr 27.
+		if start.Format("2006-01-02") != "2026-04-27" {
+			t.Errorf("month start=%s want 2026-04-27 (Mon before May 1)", start.Format("2006-01-02"))
+		}
+		if end.Sub(start) != 42*24*time.Hour {
+			t.Errorf("month range should be 42d, got %v", end.Sub(start))
+		}
+		if prev.Format("2006-01-02") != "2026-04-01" || next.Format("2006-01-02") != "2026-06-01" {
+			t.Errorf("prev/next month: got %s / %s", prev.Format("2006-01-02"), next.Format("2006-01-02"))
+		}
+	})
+}
+
 // ev is a tiny helper that builds a plannerEvent at a given start/end on a
 // fixed reference date — keeps the table tests below readable.
 func ev(t *testing.T, startHHMM, endHHMM string) plannerEvent {

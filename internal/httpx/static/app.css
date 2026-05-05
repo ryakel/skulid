@@ -375,12 +375,82 @@ table.categories input[type=color] {
 
 .planner-grid {
   display: grid;
-  grid-template-columns: 60px repeat(7, minmax(0, 1fr));
+  /* --cols is set inline by the timeline template (1 / 3 / 7). */
+  grid-template-columns: 60px repeat(var(--cols, 7), minmax(0, 1fr));
   grid-template-rows: auto auto 1fr;
   background: var(--canvas);
   border: 1px solid var(--hairline); border-radius: var(--radius-xl);
   overflow: hidden;
 }
+
+/* Timeline allday-rail / hours-rail span all timeline-grid columns */
+.planner-allday-rail,
+.planner-hours { grid-column: 1 / 2; }
+
+/* ------------------------------------------------------------------------- *
+ * View selector pills
+ * ------------------------------------------------------------------------- */
+
+.planner-view-pills {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--surface-soft); border-radius: var(--radius-pill);
+  margin-bottom: 1rem;
+}
+.planner-view-pill {
+  padding: .35rem .85rem; border-radius: var(--radius-pill);
+  font-size: .82rem; font-weight: 500; color: var(--muted); text-decoration: none;
+}
+.planner-view-pill:hover { color: var(--ink); text-decoration: none; }
+.planner-view-pill.active {
+  background: var(--canvas); color: var(--ink); box-shadow: var(--shadow-1);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Month view — 6×7 grid
+ * ------------------------------------------------------------------------- */
+
+.planner-month {
+  background: var(--canvas);
+  border: 1px solid var(--hairline); border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.planner-month-header {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: var(--surface-soft); border-bottom: 1px solid var(--hairline);
+}
+.planner-month-header > div {
+  padding: .5rem .65rem; font-size: .68rem; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted); font-weight: 600;
+  border-right: 1px solid var(--hairline);
+}
+.planner-month-header > div:last-child { border-right: none; }
+
+.planner-month-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(110px, 1fr);
+}
+.planner-month-cell {
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  padding: .35rem; display: flex; flex-direction: column; gap: .2rem;
+  min-height: 110px; overflow: hidden;
+}
+.planner-month-cell:nth-child(7n) { border-right: none; }
+.planner-month-cell.is-today { background: rgba(17,17,17,.025); }
+.planner-month-cell.out-of-month { background: var(--surface-soft); }
+.planner-month-cell.out-of-month .planner-month-date { color: var(--muted-soft); }
+.planner-month-date {
+  font-size: .82rem; font-weight: 600; color: var(--ink); letter-spacing: -.01em;
+  padding: 0 .15rem;
+}
+.planner-month-cell.is-today .planner-month-date { color: var(--ink); }
+.planner-month-events { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.planner-month-event {
+  font-size: .68rem; padding: .1rem .35rem; border-radius: var(--radius-sm);
+  color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--surface-card);
+}
+.planner-month-event.timed { background: transparent; }
 .planner-corner { background: var(--surface-soft); border-bottom: 1px solid var(--hairline); border-right: 1px solid var(--hairline); }
 
 .planner-day-header {

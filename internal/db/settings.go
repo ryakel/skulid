@@ -19,8 +19,11 @@ const (
 	// Planner preferences. PlannerTimezone is an IANA name (defaults to the
 	// first connected account's working-hours timezone, then UTC); the
 	// week-start is "0".."6" with Sunday=0 per Go's time.Weekday convention.
-	SettingPlannerTimezone = "planner_timezone"
-	SettingPlannerWeekStart = "planner_week_start"
+	// PlannerDefaultView is "day" / "3day" / "week" / "month" (defaults to
+	// "week" when unset).
+	SettingPlannerTimezone   = "planner_timezone"
+	SettingPlannerWeekStart  = "planner_week_start"
+	SettingPlannerDefaultView = "planner_default_view"
 )
 
 type SettingRepo struct {
