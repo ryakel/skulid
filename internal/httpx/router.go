@@ -72,6 +72,12 @@ func (s *Server) Router() http.Handler {
 	r.Post("/logout", s.handleLogout)
 	r.Method(http.MethodPost, "/api/webhooks/google", s.WebhookHandler)
 
+	// Dev-only: bypass real OAuth so the UI can be exercised against a
+	// synthetic owner. Only registered when SKULID_DEV_AUTH_BYPASS is set.
+	if s.Cfg.DevAuthBypass {
+		r.Get("/dev/login", s.handleDevLogin)
+	}
+
 	// Owner-protected routes.
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireOwner(s.Sessions, s.TOFU))

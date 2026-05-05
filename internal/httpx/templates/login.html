@@ -18,6 +18,11 @@
   <form method="post" action="/login/start">
     <button type="submit">Sign in with Google</button>
   </form>
+  {{if .DevAuthBypass}}
+  <div class="dev-banner" style="margin-top:1rem;text-align:center">
+    Dev auth bypass is on. <a href="/dev/login">Skip OAuth →</a>
+  </div>
+  {{end}}
 </main>
 </body>
 </html>{{end}}

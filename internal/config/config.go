@@ -18,6 +18,12 @@ type Config struct {
 	ListenAddr         string
 	AnthropicAPIKey    string
 	AnthropicModel     string
+	// DevAuthBypass enables the GET /dev/login route which claims TOFU as
+	// DevUserEmail and issues a session — lets you click around the UI
+	// without doing a real Google OAuth round-trip. Loud startup warning
+	// and a banner on every page when on. Never set in production.
+	DevAuthBypass bool
+	DevUserEmail  string
 }
 
 func Load() (*Config, error) {
@@ -29,6 +35,8 @@ func Load() (*Config, error) {
 		ListenAddr:         envOr("LISTEN_ADDR", ":8567"),
 		AnthropicAPIKey:    os.Getenv("ANTHROPIC_API_KEY"),
 		AnthropicModel:     envOr("ANTHROPIC_MODEL", "claude-opus-4-7"),
+		DevAuthBypass:      isTruthy(os.Getenv("SKULID_DEV_AUTH_BYPASS")),
+		DevUserEmail:       envOr("SKULID_DEV_USER_EMAIL", "dev@local"),
 	}
 
 	sessionSecret := os.Getenv("SESSION_SECRET")
@@ -79,4 +87,14 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// isTruthy treats the standard "yes-ish" strings as true so the dev flag
+// works whether the operator types 1, true, yes, on, etc.
+func isTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on", "y":
+		return true
+	}
+	return false
 }

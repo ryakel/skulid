@@ -45,6 +45,7 @@
   </aside>
 
   <main>
+    {{if .DevAuthBypass}}<div class="dev-banner">⚠ DEV AUTH BYPASS — every visitor authenticates as the synthetic owner. Never enable in production.</div>{{end}}
     {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
     {{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
     {{block "body" .}}{{end}}
