@@ -22,6 +22,10 @@ import (
 
 type Server struct {
 	Cfg            *config.Config
+	// Version is the build tag injected at compile time
+	// (`-ldflags "-X main.appVersion=..."`); rendered in the page footer
+	// so a user can tell which container build they're looking at.
+	Version        string
 	Sealer         *crypto.Sealer
 	Sessions       *auth.SessionManager
 	OAuth          *auth.OAuthProvider
@@ -71,6 +75,12 @@ func (s *Server) Router() http.Handler {
 	r.Get("/auth/google/callback", s.handleAuthCallback)
 	r.Post("/logout", s.handleLogout)
 	r.Method(http.MethodPost, "/api/webhooks/google", s.WebhookHandler)
+
+	// Dev-only: bypass real OAuth so the UI can be exercised against a
+	// synthetic owner. Only registered when SKULID_DEV_AUTH_BYPASS is set.
+	if s.Cfg.DevAuthBypass {
+		r.Get("/dev/login", s.handleDevLogin)
+	}
 
 	// Owner-protected routes.
 	r.Group(func(r chi.Router) {

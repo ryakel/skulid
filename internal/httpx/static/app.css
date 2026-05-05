@@ -117,6 +117,20 @@ pre code { display: block; padding: .65rem .85rem; overflow-x: auto; white-space
   background: #def5e7; color: #155c3b; margin-bottom: 1rem; border: 1px solid #b6e6c8;
 }
 .flash.error { background: #fde2e2; color: #6b1f1f; border-color: #f3b1b1; }
+.dev-banner {
+  padding: .55rem .9rem; margin-bottom: 1rem; border-radius: var(--radius-sm);
+  background: repeating-linear-gradient(45deg, #ffeaa7, #ffeaa7 10px, #fff5cc 10px, #fff5cc 20px);
+  color: #5b3500; border: 1px solid #f0c34a; font-weight: 600;
+  font-size: .85rem; letter-spacing: .01em;
+}
+.app-footer {
+  margin-top: 3rem; padding: .85rem 0; border-top: 1px solid var(--border);
+  display: flex; gap: .5rem; align-items: center;
+  color: var(--muted); font-size: .75rem;
+}
+.app-footer code {
+  background: transparent; padding: 0; font-size: .75rem; color: var(--muted);
+}
 
 /* ------------------------------------------------------------------------- *
  * Cards & grid

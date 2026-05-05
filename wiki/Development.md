@@ -24,15 +24,31 @@ export $(grep -v '^#' .env | xargs)
 go run ./cmd/skulid
 ```
 
-For development without OAuth, you can:
+For development without OAuth, set:
 
-1. Skip the login flow entirely by inserting an owner row directly:
-   ```sql
-   INSERT INTO setting (key, value) VALUES ('owner_google_sub', 'dev'),
-                                            ('owner_email', 'dev@local');
-   ```
-2. Forge a session cookie — but the simpler path is just running with
-   real OAuth via a [Cloudflare tunnel](Getting-Started#prerequisites).
+```ini
+SKULID_DEV_AUTH_BYPASS=1
+SKULID_DEV_USER_EMAIL=dev@local   # optional, defaults to dev@local
+```
+
+This registers `GET /dev/login`. Hitting that route claims TOFU as the
+synthetic `dev@local` (or whichever email you set) and issues a real
+session cookie. From then on every owner-protected page works exactly
+like prod — no Google round-trip needed.
+
+Visible safeguards so the flag never sneaks into production:
+
+- The daemon logs a `WARN` at startup naming the synthetic user.
+- The login page shows a "Skip OAuth →" link to `/dev/login`.
+- Every rendered page carries a yellow `DEV AUTH BYPASS` banner.
+- The `/dev/login` route is **only** registered when the env var is
+  set — there is no code path in the prod build that grants a session
+  without OAuth.
+
+Connecting real Google calendars still requires the actual OAuth
+flow (the bypass doesn't fake calendar API responses). For mockup
+review without any real connections, `/dev/login` is enough — just
+the calendar/event-listing pages will be empty.
 
 ## Build & test
 

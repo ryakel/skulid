@@ -1,3 +1,14 @@
+# skulid — production compose. Pulls the published image from a registry;
+# nothing compiles here. Local development uses a manually-built dev image
+# (see README.md "Quick start").
+name: skulid
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
@@ -13,16 +24,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   app:
-    # Default to the multi-arch image published by .github/workflows/build-and-publish.yml.
-    # Override SKULID_IMAGE / SKULID_TAG to point at an internal registry or pin a version.
-    # `docker compose up -d --build` rebuilds locally and tags the result with the same name.
     image: ${SKULID_IMAGE:-ghcr.io/ryakel/skulid}:${SKULID_TAG:-latest}
-    build:
-      context: .
-      args:
-        APP_VERSION: ${SKULID_TAG:-dev}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       db:
@@ -30,15 +36,20 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
       LISTEN_ADDR: ":8567"
-      EXTERNAL_URL: ${EXTERNAL_URL:?set EXTERNAL_URL to your public https URL}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET}
-      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (any random string >=32 chars)}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (base64 of 32 random bytes)}
+      # All values below have dev placeholders so the stack boots without .env
+      # for smoke testing. Replace with real values before connecting any actual
+      # Google account — the OAuth round-trip won't work otherwise.
+      EXTERNAL_URL: ${EXTERNAL_URL:-http://localhost:8567}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-do-not-use-in-production-please-rotate}
+      # base64 of 32 zero bytes; fine for local boot, NEVER use in prod.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
     ports:
       - "${HOST_PORT:-8567}:8567"
+    logging: *default-logging
 
 volumes:
   db_data:

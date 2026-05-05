@@ -25,6 +25,8 @@ func (s *Server) pageData(r *http.Request, title string) map[string]any {
 		"Features": map[string]bool{
 			"Assistant": s.Agent != nil,
 		},
+		"DevAuthBypass": s.Cfg.DevAuthBypass,
+		"Version":       s.Version,
 	}
 	if sess, ok := auth.SessionFromContext(r.Context()); ok {
 		d["Session"] = sess
@@ -72,9 +74,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	owner, _ := s.TOFU.OwnerEmail(r.Context())
 	data := map[string]any{
-		"Claimed":    owner != "",
-		"OwnerEmail": owner,
-		"Error":      r.URL.Query().Get("error"),
+		"Claimed":       owner != "",
+		"OwnerEmail":    owner,
+		"Error":         r.URL.Query().Get("error"),
+		"DevAuthBypass": s.Cfg.DevAuthBypass,
 	}
 	s.render(w, "login", data)
 }

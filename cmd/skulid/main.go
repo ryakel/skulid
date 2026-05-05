@@ -124,6 +124,11 @@ func run(log *slog.Logger) error {
 		log.Info("ai assistant disabled (set ANTHROPIC_API_KEY to enable)")
 	}
 
+	if cfg.DevAuthBypass {
+		log.Warn("DEV AUTH BYPASS ENABLED — /dev/login skips OAuth and grants owner session. NEVER run with this flag in production.",
+			"dev_user_email", cfg.DevUserEmail)
+	}
+
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -141,6 +146,7 @@ func run(log *slog.Logger) error {
 
 	srv := &httpx.Server{
 		Cfg:            cfg,
+		Version:        appVersion,
 		Sealer:         sealer,
 		Sessions:       sessions,
 		OAuth:          oauth,
