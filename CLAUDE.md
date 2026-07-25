@@ -10,42 +10,10 @@ binary + Postgres in Docker. Two core features (sync rules, smart
 blocks) plus an optional Anthropic-powered chat assistant.
 
 The user-facing docs live in `wiki/` and are mirrored to the GitHub
-Wiki by `.github/workflows/wiki-sync.yml`. Read those first if you
-need product context — they cover threat model, architecture, every
-configuration knob, and operations.
-
-## Repo map
-
-```
-cmd/skulid/main.go             # entrypoint; wires every dependency
-internal/
-  ai/                          # Anthropic assistant (only enabled when ANTHROPIC_API_KEY is set)
-  auth/                        # OAuth, sessions (HMAC-SHA256), TOFU, middleware
-  calendar/                    # Google Calendar v3 client wrapper + extendedProperties helpers
-  category/                    # pure event categorizer (no I/O, exhaustively tested)
-  config/                      # env-var loading
-  crypto/                      # AES-256-GCM token sealing
-  db/                          # pgx repos + scanned struct models
-  hours/                       # pure WorkingHours + window arithmetic + slot finders
-  httpx/                       # chi router, html/template + HTMX, handlers
-  sync/                        # rule engine + smart-block engine + scheduler (tasks/habits)
-  webhook/                     # Google push notification handler
-  worker/                      # per-account goroutines + scheduler tick + AI cleanup
-migrations/                    # *.sql, embedded into the binary via embed.FS
-wiki/                          # user-facing docs, synced to GitHub Wiki
-```
-
-## Common commands
-
-| Task                       | Command                                  |
-| -------------------------- | ---------------------------------------- |
-| Build                      | `go build ./...`                         |
-| Vet                        | `go vet ./...`                           |
-| Tests (fast)               | `go test ./...`                          |
-| Tests (race + fresh cache) | `go test -race -count=1 ./...`           |
-| Boot the stack             | `docker compose up -d --build`           |
-| Tail app logs              | `docker compose logs -f app`             |
-| Reset everything           | `docker compose down -v`                 |
+Wiki by `.github/workflows/wiki-sync.yml`. Read those when you need
+product context — they cover threat model, architecture, every
+configuration knob, and operations. Code layout follows the standard
+`cmd/` + `internal/` Go shape; `wiki/Architecture.md` maps it.
 
 ## Conventions worth respecting
 
@@ -90,15 +58,15 @@ trips the loop guard. Don't remove the legacy check until we're
 confident no pre-rename events exist in production.
 
 The rule engine refuses to forward any event where
-`calendar.IsManaged(ev) == true`. **Don't break this guarantee** —
-without it, two bidirectional rules can ping-pong indefinitely.
+`calendar.IsManaged(ev) == true`. Without this guarantee, two
+bidirectional rules can ping-pong indefinitely.
 
 ### Tests
 
 The test suite covers pure logic only. Postgres and Google Calendar
 integration tests are deferred (see `wiki/Development.md`). When you
 add new pure helpers, add tests. When you change something covered by
-the suite, update the suite.
+the suite, update the suite. Run with `go test -race -count=1 ./...`.
 
 ## Areas that require care
 
