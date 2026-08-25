@@ -154,10 +154,46 @@ If you have multiple Google accounts (work + personal, etc.), go to
 **Accounts → + Connect Google account** and run the OAuth flow again
 for each one. They all funnel into the same instance.
 
-When an account is connected, skulid auto-discovers every calendar
-visible to it and registers a Google push channel (a webhook
-subscription) so changes flow back in near-real time. You can re-trigger
-discovery anytime with **Refresh calendars**.
+When an account is connected, skulid discovers every calendar visible to
+it and lists them on **Accounts** — but they arrive **disabled**, and a
+disabled calendar registers no push channel and syncs nothing. Enable the
+ones you actually want with the **Enable** button on each row. Enabling
+registers the Google push channel (a webhook subscription) at that point,
+so changes flow back in near-real time.
+
+That default is deliberate: connecting an account should never start
+watching calendars you didn't choose. It matters most for an account you
+don't own outright — see
+[Connecting an account you don't own](#connecting-an-account-you-dont-own)
+below. Re-run discovery anytime with **Refresh calendars**; it never
+disturbs what you have already enabled.
+
+### Connecting an account you don't own
+
+Connecting an employer's Google Workspace account is a different
+proposition from connecting your own, in two ways that have nothing to do
+with this code:
+
+- **Their admin may simply block it.** Workspace has *API controls → App
+  access control*, and restricting unverified third-party apps that
+  request sensitive scopes is a common configuration. skulid is exactly
+  that, so the connect may fail with an admin-blocked error. That is
+  their policy working as intended, not a bug here.
+- **Their data policy governs, not yours.** Routing corporate calendar
+  data through a host you operate personally is the sort of thing an
+  acceptable-use policy tends to have an opinion about. Find out before
+  you connect, not after.
+
+If you do connect one, two settings are worth setting deliberately:
+
+1. Leave its calendars disabled except the ones you genuinely need.
+2. If you run the assistant, use **Hide from assistant** on that account
+   — see [AI Assistant § Excluding an account](AI-Assistant#excluding-an-account).
+
+skulid never stores event content: `event_link` holds Google event IDs
+and etags, never titles, descriptions or attendees. Events are fetched,
+transformed in memory, and written to the target. The assistant is the
+one exception, and the one you can switch off per account.
 
 ## 6. Create your first sync rule
 

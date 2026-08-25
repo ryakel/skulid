@@ -18,11 +18,16 @@ const calendarSelectCols = `id, account_id, google_calendar_id, summary, time_zo
 	last_synced_at, default_category_id,
 	working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb, buffers, enabled`
 
+// Upsert records a calendar found during discovery. New rows arrive
+// disabled: connecting an account should not register push channels on
+// every calendar it can see before the owner has chosen any. The conflict
+// branch deliberately leaves `enabled` alone, so re-running discovery on an
+// existing account never disturbs what the owner already turned on.
 func (r *CalendarRepo) Upsert(ctx context.Context, accountID int64, googleID, summary, tz, color string) (int64, error) {
 	var id int64
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO calendar (account_id, google_calendar_id, summary, time_zone, color)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO calendar (account_id, google_calendar_id, summary, time_zone, color, enabled)
+		VALUES ($1, $2, $3, $4, $5, FALSE)
 		ON CONFLICT (account_id, google_calendar_id) DO UPDATE SET
 			summary = EXCLUDED.summary,
 			time_zone = EXCLUDED.time_zone,

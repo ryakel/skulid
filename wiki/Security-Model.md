@@ -99,6 +99,27 @@ If you don't trust the AI assistant feature, just don't set
 `ANTHROPIC_API_KEY` — the routes are unregistered and the nav link
 hidden when it's absent.
 
+## Accounts you don't own
+
+Connecting an employer's Workspace account puts their data in scope. Two
+things bound the exposure:
+
+- **No event content is persisted.** `event_link` stores Google event IDs
+  and etags; `audit_log` stores IDs and action verbs. Titles,
+  descriptions and attendees are fetched, transformed in memory, written
+  to the target, and dropped.
+- **The assistant is the one egress path, and it is per-account
+  switchable.** See
+  [AI Assistant § Excluding an account](AI-Assistant#excluding-an-account).
+
+Newly discovered calendars arrive disabled, so connecting an account
+registers no watch channels until you choose.
+
+What this does *not* address is the employer's own policy: whether their
+Workspace admin permits an unverified third-party app at all, and whether
+their rules allow their calendar data to transit a host you run. Both are
+outside anything this code can enforce.
+
 ## What's *not* protected
 
 - **Local network attacker who can read process memory.** Tokens are
