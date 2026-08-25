@@ -40,6 +40,12 @@ on your app's **publishing status** — not on whether the app is
 > beautifully for a week and then stop syncing. This is the single most
 > common way to break a self-hosted install.
 
+The **"Google hasn't verified this app"** screen is a separate thing, and
+it is not a symptom of any of this. It appears whenever an External app is
+unverified — in Testing and In production alike — so seeing it tells you
+nothing about your publishing status. Don't diagnose from it; open the
+consent screen and read the status directly.
+
 Pick whichever of these two matches your accounts:
 
 | | **Internal** | **External + Production** |
@@ -67,7 +73,9 @@ for a single-user install:
 
 - Each account sees a **"Google hasn't verified this app"** interstitial
   the first time it connects. Click **Advanced → Go to skulid (unsafe)**.
-  It appears once per account, not once per sync.
+  It appears once per account, not once per sync. The wording is aimed at
+  people being phished by a stranger's app; this is your OAuth client,
+  your code, on your own box.
 - The project is capped at **100 authorized users for its lifetime**. You
   will use one or two.
 
