@@ -20,6 +20,11 @@ type Account struct {
 	NeedsReauth      bool
 	ReauthReason     string
 	ReauthDetectedAt *time.Time
+	// Excluded accounts are invisible to the AI assistant: their calendars
+	// never appear in its listings and it cannot obtain a Google client for
+	// them. Sync is unaffected. Use for accounts whose data must not be sent
+	// to Anthropic -- an employer's, typically.
+	AIExcluded bool
 	// Per-account hour windows (Working / Personal / Meeting). All nullable JSON;
 	// readers should fall back: personal -> working -> default; meeting -> working.
 	WorkingHours  json.RawMessage

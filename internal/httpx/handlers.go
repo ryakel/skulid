@@ -95,6 +95,26 @@ func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+// handleAccountAIExcluded controls whether the AI assistant may see this
+// account. Excluded accounts keep syncing normally; they simply become
+// invisible to the assistant, so nothing about them is sent to Anthropic.
+func (s *Server) handleAccountAIExcluded(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if err := s.Accounts.SetAIExcluded(r.Context(), id, r.FormValue("excluded") == "1"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/accounts", http.StatusFound)
+}
+
 // handleAccountReconnect re-runs consent for one existing account. The
 // callback upserts on google_sub, so the stored rules, blocks and calendar
 // settings survive -- only the tokens are replaced.

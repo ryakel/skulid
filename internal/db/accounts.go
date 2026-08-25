@@ -19,7 +19,7 @@ func NewAccountRepo(pool *pgxpool.Pool) *AccountRepo { return &AccountRepo{pool:
 const accountSelectCols = `id, google_sub, email, refresh_token_sealed, access_token_sealed,
 	       access_token_expires_at, primary_calendar_id, created_at,
 	       working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb,
-	       needs_reauth, reauth_reason, reauth_detected_at`
+	       needs_reauth, reauth_reason, reauth_detected_at, ai_excluded`
 
 func (r *AccountRepo) Upsert(ctx context.Context, sub, email, refreshSealed, accessSealed string, accessExpires *time.Time) (int64, error) {
 	var id int64
@@ -138,6 +138,46 @@ func (r *AccountRepo) ListNeedsReauth(ctx context.Context) ([]Account, error) {
 	return out, rows.Err()
 }
 
+// SetAIExcluded controls whether the AI assistant may see this account.
+func (r *AccountRepo) SetAIExcluded(ctx context.Context, id int64, excluded bool) error {
+	_, err := r.pool.Exec(ctx, `UPDATE account SET ai_excluded = $2 WHERE id = $1`, id, excluded)
+	return err
+}
+
+// AIExcludedIDs returns the set of accounts the assistant must not touch.
+// Returned as a set so callers can filter a calendar list in one pass.
+func (r *AccountRepo) AIExcludedIDs(ctx context.Context) (map[int64]bool, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id FROM account WHERE ai_excluded`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// IsAIExcluded reports whether one account is off-limits to the assistant.
+// Missing accounts report true: refusing to hand out a client for an account
+// we cannot verify is the safe direction to fail.
+func (r *AccountRepo) IsAIExcluded(ctx context.Context, id int64) (bool, error) {
+	var excluded bool
+	err := r.pool.QueryRow(ctx, `SELECT ai_excluded FROM account WHERE id = $1`, id).Scan(&excluded)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	return excluded, nil
+}
+
 func (r *AccountRepo) Delete(ctx context.Context, id int64) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM account WHERE id = $1`, id)
 	return err
@@ -152,7 +192,7 @@ func scanAccount(row rowScanner) (*Account, error) {
 	if err := row.Scan(&a.ID, &a.GoogleSub, &a.Email, &a.RefreshTokenSealed,
 		&a.AccessTokenSealed, &a.AccessTokenExpiresAt, &a.PrimaryCalendarID, &a.CreatedAt,
 		&a.WorkingHours, &a.PersonalHours, &a.MeetingHours,
-		&a.NeedsReauth, &a.ReauthReason, &a.ReauthDetectedAt); err != nil {
+		&a.NeedsReauth, &a.ReauthReason, &a.ReauthDetectedAt, &a.AIExcluded); err != nil {
 		return nil, err
 	}
 	return &a, nil

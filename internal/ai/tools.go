@@ -43,7 +43,7 @@ func NewToolbox(accounts *db.AccountRepo, calendars *db.CalendarRepo, audit *db.
 		habits:         habits,
 		occurrences:    occurrences,
 		scheduler:      scheduler,
-		clientFor:      clientFor,
+		clientFor:      guardClientFor(accounts, clientFor),
 		conversationID: conversationID,
 	}
 }
@@ -51,17 +51,17 @@ func NewToolbox(accounts *db.AccountRepo, calendars *db.CalendarRepo, audit *db.
 // writeTools is the set of tools that must NOT auto-execute. The agent loop
 // stages these as ai_pending_action rows and waits for user confirmation.
 var writeTools = map[string]bool{
-	"create_event":   true,
-	"update_event":   true,
-	"delete_event":   true,
-	"move_event":     true,
-	"create_task":    true,
-	"update_task":    true,
-	"complete_task":  true,
-	"delete_task":    true,
-	"create_habit":   true,
-	"update_habit":   true,
-	"delete_habit":   true,
+	"create_event":  true,
+	"update_event":  true,
+	"delete_event":  true,
+	"move_event":    true,
+	"create_task":   true,
+	"update_task":   true,
+	"complete_task": true,
+	"delete_task":   true,
+	"create_habit":  true,
+	"update_habit":  true,
+	"delete_habit":  true,
 }
 
 // IsWrite reports whether the named tool requires confirmation.
@@ -435,7 +435,7 @@ type calendarOut struct {
 }
 
 func (t *Toolbox) listCalendars(ctx context.Context) (string, error) {
-	cals, err := t.calendars.ListAll(ctx)
+	cals, err := t.visibleCalendars(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -536,7 +536,7 @@ func (t *Toolbox) findEvent(ctx context.Context, input json.RawMessage) (string,
 	if p.TimeMax == "" {
 		p.TimeMax = now.AddDate(0, 0, 90).Format(time.RFC3339)
 	}
-	cals, err := t.calendars.ListAll(ctx)
+	cals, err := t.visibleCalendars(ctx)
 	if err != nil {
 		return "", err
 	}

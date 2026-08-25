@@ -216,4 +216,3 @@ func prettyJSON(raw []byte) string {
 	}
 	return string(pretty)
 }
-

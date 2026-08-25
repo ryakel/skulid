@@ -79,6 +79,32 @@ plus `skulidAiSession=<conversation_id>` so they're attributable
 later and don't trigger sync rules as a feedback loop. Task and habit
 writes also pass through the audit log with `kind="ai"`.
 
+## Excluding an account
+
+The assistant reaches every connected account by default. Conversations —
+including whatever calendar data a tool read on your behalf — are sent to
+Anthropic's API and kept in Postgres for 30 days. For most accounts that
+is the point. For an account whose data must not leave this host, it is
+not.
+
+**Accounts → Hide from assistant** marks an account excluded. From then
+on:
+
+- Its calendars never appear in `list_calendars` or `search_events`, so
+  the model is never told they exist.
+- Any tool that tries to reach it fails with "account is excluded from
+  the AI assistant" instead of receiving a Google client.
+
+Sync is completely unaffected — rules, smart blocks, tasks and habits all
+keep running against an excluded account. Only the assistant is blocked.
+
+Enforcement is a single wrapper around the toolbox's `ClientFor`, so it
+covers every tool at once, including any added later; a lookup failure
+denies rather than falling open. **Hide from assistant** appears only
+when `ANTHROPIC_API_KEY` is set, but the setting persists either way, so
+turning the assistant on later cannot silently expose an account you
+previously excluded.
+
 ## Conversation persistence
 
 - Conversations are stored in Postgres (`ai_conversation`,

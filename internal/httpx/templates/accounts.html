@@ -12,12 +12,24 @@
       <td>
         {{.Email}}
         {{if .NeedsReauth}}<span class="cat-pill" style="background:#dc2626;margin-left:.4rem">needs reconnect</span>{{end}}
+        {{if .AIExcluded}}<span class="cat-pill" style="background:#0ea5e9;margin-left:.4rem">hidden from assistant</span>{{end}}
       </td>
       <td>{{(index $.CalendarsByAccount .ID) | len}}</td>
       <td>{{fmtTime .CreatedAt}}</td>
       <td class="actions">
         {{if .NeedsReauth}}<form method="post" action="/accounts/{{.ID}}/reconnect"><button type="submit">Reconnect</button></form>{{end}}
         <form method="post" action="/accounts/{{.ID}}/refresh"><button type="submit" class="secondary">Refresh calendars</button></form>
+        {{if $.Features.Assistant}}
+        <form method="post" action="/accounts/{{.ID}}/ai-excluded">
+          {{if .AIExcluded}}
+            <input type="hidden" name="excluded" value="0">
+            <button type="submit" class="secondary" title="Let the assistant read and propose changes to this account">Show to assistant</button>
+          {{else}}
+            <input type="hidden" name="excluded" value="1">
+            <button type="submit" class="secondary" title="Hide this account from the assistant; nothing about it is sent to Anthropic">Hide from assistant</button>
+          {{end}}
+        </form>
+        {{end}}
         <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Disconnect {{.Email}}?')"><button type="submit" class="danger">Disconnect</button></form>
       </td>
     </tr>

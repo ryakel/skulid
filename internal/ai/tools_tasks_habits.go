@@ -19,18 +19,18 @@ type listTasksInput struct {
 }
 
 type taskOut struct {
-	ID                int64   `json:"id"`
-	Title             string  `json:"title"`
-	Notes             string  `json:"notes,omitempty"`
-	Priority          string  `json:"priority"`
-	DurationMinutes   int     `json:"duration_minutes"`
-	DueAt             string  `json:"due_at,omitempty"`
-	Status            string  `json:"status"`
-	TargetCalendarID  int64   `json:"target_calendar_id"`
-	CategoryID        *int64  `json:"category_id,omitempty"`
-	ScheduledStartsAt string  `json:"scheduled_starts_at,omitempty"`
-	ScheduledEndsAt   string  `json:"scheduled_ends_at,omitempty"`
-	ScheduledEventID  string  `json:"scheduled_event_id,omitempty"`
+	ID                int64  `json:"id"`
+	Title             string `json:"title"`
+	Notes             string `json:"notes,omitempty"`
+	Priority          string `json:"priority"`
+	DurationMinutes   int    `json:"duration_minutes"`
+	DueAt             string `json:"due_at,omitempty"`
+	Status            string `json:"status"`
+	TargetCalendarID  int64  `json:"target_calendar_id"`
+	CategoryID        *int64 `json:"category_id,omitempty"`
+	ScheduledStartsAt string `json:"scheduled_starts_at,omitempty"`
+	ScheduledEndsAt   string `json:"scheduled_ends_at,omitempty"`
+	ScheduledEventID  string `json:"scheduled_event_id,omitempty"`
 }
 
 func (t *Toolbox) listTasks(ctx context.Context, input json.RawMessage) (string, error) {
