@@ -18,14 +18,62 @@ Google account connected and one sync rule firing.
 
 1. Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
 2. Create or pick a project.
-3. **OAuth consent screen**: choose **External**, add yourself as a test
-   user. (You don't need to publish the app — skulid is for one
-   person.)
+3. Configure the **OAuth consent screen** — see
+   [Publishing status: the one setting that matters](#publishing-status-the-one-setting-that-matters)
+   directly below. Getting this wrong breaks skulid one week later,
+   so read it before you click.
 4. **Create credentials → OAuth client ID → Web application**.
 5. Authorized redirect URIs: add `https://YOUR.PUBLIC.HOST/auth/google/callback`.
 6. Copy the **client ID** and **client secret**.
 7. Under **APIs & Services → Library**, enable the **Google Calendar API**
    for the project.
+
+### Publishing status: the one setting that matters
+
+skulid holds one long-lived refresh token per connected account and runs
+unattended. Google's rules for how long that token lives depend entirely
+on your app's **publishing status** — not on whether the app is
+"verified".
+
+> **Never leave the app in Testing.** An **External** app in **Testing**
+> status has *every refresh token revoked after 7 days*. skulid will run
+> beautifully for a week and then stop syncing. This is the single most
+> common way to break a self-hosted install.
+
+Pick whichever of these two matches your accounts:
+
+| | **Internal** | **External + Production** |
+| --- | --- | --- |
+| Available to | Google Workspace orgs only | anyone |
+| Accounts you can connect | only accounts in your Workspace domain | any Google account, consumer `@gmail.com` included |
+| Refresh token lifetime | indefinite | indefinite |
+| Consent warning screen | none | one-time "Google hasn't verified this app" per account |
+| Verification needed | no | no |
+
+**If every calendar you want to sync lives in one Google Workspace
+domain**, choose **Internal**. Nothing else to do — no warning screen, no
+user cap, no verification.
+
+**If you need to connect even one consumer `@gmail.com` account**,
+Internal will refuse it. Choose **External**, then click **Publish app**
+on the consent screen so the status reads *In production*. Leave it
+unverified.
+
+You do **not** need to submit the app for Google verification. skulid
+asks only for the Calendar scope, which Google classifies as *sensitive*,
+not *restricted* — so no security audit or CASA assessment applies. The
+consequences of staying unverified are exactly two, and neither matters
+for a single-user install:
+
+- Each account sees a **"Google hasn't verified this app"** interstitial
+  the first time it connects. Click **Advanced → Go to skulid (unsafe)**.
+  It appears once per account, not once per sync.
+- The project is capped at **100 authorized users for its lifetime**. You
+  will use one or two.
+
+Submitting for verification would remove the interstitial, but it means
+publishing a privacy policy and homepage on a domain you own and waiting
+on a review — all to remove one click on a private tool only you use.
 
 ## 2. Clone and configure
 
