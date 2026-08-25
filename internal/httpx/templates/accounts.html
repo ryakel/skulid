@@ -9,14 +9,26 @@
   <tbody>
   {{range .Accounts}}
     <tr>
-      <td>{{.Email}}</td>
+      <td>
+        {{.Email}}
+        {{if .NeedsReauth}}<span class="cat-pill" style="background:#dc2626;margin-left:.4rem">needs reconnect</span>{{end}}
+      </td>
       <td>{{(index $.CalendarsByAccount .ID) | len}}</td>
       <td>{{fmtTime .CreatedAt}}</td>
       <td class="actions">
-        <form method="post" action="/accounts/{{.ID}}/refresh"><button type="submit">Refresh calendars</button></form>
+        {{if .NeedsReauth}}<form method="post" action="/accounts/{{.ID}}/reconnect"><button type="submit">Reconnect</button></form>{{end}}
+        <form method="post" action="/accounts/{{.ID}}/refresh"><button type="submit" class="secondary">Refresh calendars</button></form>
         <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Disconnect {{.Email}}?')"><button type="submit" class="danger">Disconnect</button></form>
       </td>
     </tr>
+    {{if .NeedsReauth}}
+    <tr><td colspan="4" class="nested">
+      <div class="reauth-detail">
+        <strong>Why sync stopped:</strong> {{.ReauthReason}}
+        {{if .ReauthDetectedAt}}<span class="muted">Detected {{fmtTimePtr .ReauthDetectedAt}}.</span>{{end}}
+      </div>
+    </td></tr>
+    {{end}}
     {{with index $.CalendarsByAccount .ID}}
     <tr><td colspan="4" class="nested">
       <ul class="calendars">

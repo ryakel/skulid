@@ -69,6 +69,37 @@ docker compose logs -f app \
 
 ## Troubleshooting
 
+### "Sync is stopped" banner / an account needs reconnecting
+
+skulid shows a red banner on every page, and a **needs reconnect** pill on
+**Accounts**, when Google has permanently refused to renew an account's
+access. The Accounts row spells out the reason. Click **Reconnect** on that
+row and complete the consent screen; rules, smart blocks and per-calendar
+settings all survive, because the account is matched on its Google subject
+ID and only the stored tokens are replaced.
+
+Google revokes a refresh token when:
+
+- **The OAuth app is still in Testing publishing status.** Tokens die
+  after 7 days, every time. This is the usual cause, and reconnecting only
+  buys another week — fix the publishing status instead, per
+  [Getting Started § Publishing status](Getting-Started#publishing-status-the-one-setting-that-matters).
+- Consent was withdrawn at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
+- The account's password changed.
+- The token went unused for six months.
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` changed, or the OAuth client
+  was deleted in Google Cloud. Here every account breaks at once, and no
+  amount of reconnecting helps until `.env` matches the real client.
+
+Transient failures — a network blip, a Google 5xx, a rate limit — do *not*
+raise the banner. They are retried on the next tick.
+
+To check the state directly:
+
+```sql
+SELECT email, needs_reauth, reauth_reason, reauth_detected_at FROM account;
+```
+
 ### Events aren't syncing
 
 1. **Audit log** — is the rule actually firing? Look for matching
