@@ -31,6 +31,13 @@ func (s *Server) pageData(r *http.Request, title string) map[string]any {
 	if sess, ok := auth.SessionFromContext(r.Context()); ok {
 		d["Session"] = sess
 	}
+	// Surfaced on every page: a locked-out account means sync is silently
+	// dead, which is the one failure the owner must not discover by accident.
+	if broken, err := s.Accounts.ListNeedsReauth(r.Context()); err != nil {
+		s.Log.Error("listing accounts needing reauth failed", "err", err)
+	} else if len(broken) > 0 {
+		d["ReauthAccounts"] = broken
+	}
 	return d
 }
 
@@ -84,12 +91,50 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
-	url := s.OAuth.StartFlow(w, auth.IntentLogin, s.secureCookies())
+	url := s.OAuth.StartFlow(w, auth.IntentLogin, s.secureCookies(), "")
+	http.Redirect(w, r, url, http.StatusFound)
+}
+
+// handleAccountAIExcluded controls whether the AI assistant may see this
+// account. Excluded accounts keep syncing normally; they simply become
+// invisible to the assistant, so nothing about them is sent to Anthropic.
+func (s *Server) handleAccountAIExcluded(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if err := s.Accounts.SetAIExcluded(r.Context(), id, r.FormValue("excluded") == "1"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/accounts", http.StatusFound)
+}
+
+// handleAccountReconnect re-runs consent for one existing account. The
+// callback upserts on google_sub, so the stored rules, blocks and calendar
+// settings survive -- only the tokens are replaced.
+func (s *Server) handleAccountReconnect(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	acct, err := s.Accounts.Get(r.Context(), id)
+	if err != nil || acct == nil {
+		http.Error(w, "account not found", http.StatusNotFound)
+		return
+	}
+	url := s.OAuth.StartFlow(w, auth.IntentConnect, s.secureCookies(), acct.Email)
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
 func (s *Server) handleAccountConnect(w http.ResponseWriter, r *http.Request) {
-	url := s.OAuth.StartFlow(w, auth.IntentConnect, s.secureCookies())
+	url := s.OAuth.StartFlow(w, auth.IntentConnect, s.secureCookies(), "")
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
@@ -848,4 +893,3 @@ func splitCSV(s string) []string {
 	}
 	return out
 }
-

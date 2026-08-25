@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	stateCookie    = "skulid_oauth_state"
-	intentCookie   = "skulid_oauth_intent"
-	IntentLogin    = "login"    // owner login (TOFU)
-	IntentConnect  = "connect"  // additional account connection
+	stateCookie   = "skulid_oauth_state"
+	intentCookie  = "skulid_oauth_intent"
+	IntentLogin   = "login"   // owner login (TOFU)
+	IntentConnect = "connect" // additional account connection
 )
 
 type OAuthProvider struct {
@@ -43,7 +43,10 @@ func NewOAuthProvider(clientID, clientSecret, redirectURL string) *OAuthProvider
 
 func (p *OAuthProvider) Config() *oauth2.Config { return p.cfg }
 
-func (p *OAuthProvider) StartFlow(w http.ResponseWriter, intent string, secure bool) string {
+// StartFlow begins a consent round-trip. loginHint, when non-empty, is passed
+// to Google as login_hint so a reconnect lands on the account that actually
+// broke instead of whichever one the browser happens to be signed into.
+func (p *OAuthProvider) StartFlow(w http.ResponseWriter, intent string, secure bool, loginHint string) string {
 	state := randomState()
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookie,
@@ -64,10 +67,14 @@ func (p *OAuthProvider) StartFlow(w http.ResponseWriter, intent string, secure b
 		MaxAge:   600,
 	})
 	// Always request refresh tokens, force consent so we get one even on re-auth.
-	return p.cfg.AuthCodeURL(state,
+	opts := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("prompt", "consent"),
-	)
+	}
+	if loginHint != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("login_hint", loginHint))
+	}
+	return p.cfg.AuthCodeURL(state, opts...)
 }
 
 // VerifyState reads the OAuth state cookie and intent. It clears both cookies.

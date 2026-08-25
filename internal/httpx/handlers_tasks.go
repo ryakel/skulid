@@ -234,5 +234,5 @@ var errInvalidDatetimeLocal = newConstErr("invalid datetime-local")
 
 type constErr string
 
-func newConstErr(s string) error  { return constErr(s) }
-func (e constErr) Error() string  { return string(e) }
+func newConstErr(s string) error { return constErr(s) }
+func (e constErr) Error() string { return string(e) }

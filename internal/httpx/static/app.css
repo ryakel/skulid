@@ -159,6 +159,19 @@ main { padding: 2rem 2.25rem 2.5rem; max-width: 1400px; }
 }
 .flash.error { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
 
+.reauth-banner {
+  padding: .7rem .95rem; margin-bottom: 1rem; border-radius: var(--radius-md);
+  background: #fef2f2; color: #991b1b; border: 1px solid #fecaca;
+  font-size: .86rem; line-height: 1.5;
+}
+.reauth-banner code { background: #fee2e2; padding: .05rem .3rem; border-radius: 4px; }
+.reauth-banner a { color: #991b1b; font-weight: 600; white-space: nowrap; }
+
+.reauth-detail {
+  padding: .55rem .75rem; border-radius: var(--radius-md);
+  background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: .82rem;
+}
+
 .dev-banner {
   padding: .55rem .95rem; margin-bottom: 1rem; border-radius: var(--radius-md);
   background: #fef3c7; color: #78350f; border: 1px solid #fcd34d;

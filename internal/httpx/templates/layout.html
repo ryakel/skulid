@@ -49,6 +49,13 @@
 
   <main>
     {{if .DevAuthBypass}}<div class="dev-banner">⚠ DEV AUTH BYPASS — every visitor authenticates as the synthetic owner. Never enable in production.</div>{{end}}
+    {{if .ReauthAccounts}}<div class="reauth-banner">
+      <strong>Sync is stopped.</strong>
+      Google will not renew access for
+      {{range $i, $a := .ReauthAccounts}}{{if $i}}, {{end}}<code>{{$a.Email}}</code>{{end}}.
+      Nothing syncs for {{if gt (len .ReauthAccounts) 1}}these accounts{{else}}this account{{end}} until you reconnect.
+      <a href="/accounts">Fix on Accounts →</a>
+    </div>{{end}}
     {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
     {{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
     {{block "body" .}}{{end}}

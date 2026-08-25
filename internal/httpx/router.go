@@ -21,7 +21,7 @@ import (
 )
 
 type Server struct {
-	Cfg            *config.Config
+	Cfg *config.Config
 	// Version is the build tag injected at compile time
 	// (`-ldflags "-X main.appVersion=..."`); rendered in the page footer
 	// so a user can tell which container build they're looking at.
@@ -93,6 +93,8 @@ func (s *Server) Router() http.Handler {
 
 		r.Get("/accounts", s.handleAccountsPage)
 		r.Post("/accounts/connect", s.handleAccountConnect)
+		r.Post("/accounts/{id}/reconnect", s.handleAccountReconnect)
+		r.Post("/accounts/{id}/ai-excluded", s.handleAccountAIExcluded)
 		r.Post("/accounts/{id}/refresh", s.handleAccountRefresh)
 		r.Post("/accounts/{id}/delete", s.handleAccountDelete)
 		r.Get("/calendars/{id}", s.handleCalendarSettings)

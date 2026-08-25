@@ -53,8 +53,8 @@ type plannerEvent struct {
 	Title         string
 	Start         time.Time
 	End           time.Time
-	StartLabel    string  // "9:00 AM"
-	DurationLabel string  // "30m"
+	StartLabel    string // "9:00 AM"
+	DurationLabel string // "30m"
 	CategorySlug  string
 	CategoryName  string
 	CategoryColor string
@@ -67,12 +67,12 @@ type plannerEvent struct {
 	HeightPct     float64
 	// Short marks events ≤ 30 min so the template renders without the meta
 	// line (which doesn't fit in tiny boxes).
-	Short         bool
+	Short bool
 	// Lane / Lanes describe horizontal placement when events overlap. Lane is
 	// 0-indexed; Lanes is the cluster's max concurrent count. A solo event
 	// renders at Lane=0, Lanes=1 → full column width.
-	Lane          int
-	Lanes         int
+	Lane  int
+	Lanes int
 }
 
 type plannerDay struct {
@@ -81,16 +81,16 @@ type plannerDay struct {
 	DateLabel string // "Apr 27"
 	DayNum    int    // day-of-month, used by month-grid cells
 	IsToday   bool
-	InMonth   bool   // true unless rendered in month view as a leading/trailing spillover cell
+	InMonth   bool // true unless rendered in month view as a leading/trailing spillover cell
 	AllDay    []plannerEvent
 	Timed     []plannerEvent
 }
 
 type plannerCategoryTotal struct {
-	Slug    string
-	Name    string
-	Color   string
-	Hours   float64 // total hours scheduled this week
+	Slug  string
+	Name  string
+	Color string
+	Hours float64 // total hours scheduled this week
 }
 
 func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
@@ -659,4 +659,3 @@ func durationLabel(d time.Duration) string {
 func round1(v float64) float64 {
 	return float64(int(v*10+0.5)) / 10
 }
-
