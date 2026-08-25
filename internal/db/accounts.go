@@ -18,7 +18,8 @@ func NewAccountRepo(pool *pgxpool.Pool) *AccountRepo { return &AccountRepo{pool:
 
 const accountSelectCols = `id, google_sub, email, refresh_token_sealed, access_token_sealed,
 	       access_token_expires_at, primary_calendar_id, created_at,
-	       working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb`
+	       working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb,
+	       needs_reauth, reauth_reason, reauth_detected_at`
 
 func (r *AccountRepo) Upsert(ctx context.Context, sub, email, refreshSealed, accessSealed string, accessExpires *time.Time) (int64, error) {
 	var id int64
@@ -29,7 +30,10 @@ func (r *AccountRepo) Upsert(ctx context.Context, sub, email, refreshSealed, acc
 			email = EXCLUDED.email,
 			refresh_token_sealed = CASE WHEN EXCLUDED.refresh_token_sealed = '' THEN account.refresh_token_sealed ELSE EXCLUDED.refresh_token_sealed END,
 			access_token_sealed = EXCLUDED.access_token_sealed,
-			access_token_expires_at = EXCLUDED.access_token_expires_at
+			access_token_expires_at = EXCLUDED.access_token_expires_at,
+			needs_reauth = FALSE,
+			reauth_reason = '',
+			reauth_detected_at = NULL
 		RETURNING id`, sub, email, refreshSealed, accessSealed, accessExpires).Scan(&id)
 	return id, err
 }
@@ -92,6 +96,48 @@ func (r *AccountRepo) List(ctx context.Context) ([]Account, error) {
 	return out, rows.Err()
 }
 
+// MarkNeedsReauth flags an account whose refresh token Google will never
+// honour again. Idempotent: re-flagging keeps the original detection time so
+// the UI can say how long sync has actually been down.
+func (r *AccountRepo) MarkNeedsReauth(ctx context.Context, id int64, reason string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE account
+		SET needs_reauth = TRUE,
+		    reauth_reason = $2,
+		    reauth_detected_at = COALESCE(reauth_detected_at, NOW())
+		WHERE id = $1`, id, reason)
+	return err
+}
+
+// ClearNeedsReauth resets the flag after a refresh succeeds again. It only
+// touches rows that are actually flagged so the common path is a no-op.
+func (r *AccountRepo) ClearNeedsReauth(ctx context.Context, id int64) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE account
+		SET needs_reauth = FALSE, reauth_reason = '', reauth_detected_at = NULL
+		WHERE id = $1 AND needs_reauth`, id)
+	return err
+}
+
+// ListNeedsReauth returns every account currently locked out, for the
+// banner the layout renders on each page.
+func (r *AccountRepo) ListNeedsReauth(ctx context.Context) ([]Account, error) {
+	rows, err := r.pool.Query(ctx, `SELECT `+accountSelectCols+` FROM account WHERE needs_reauth ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Account
+	for rows.Next() {
+		a, err := scanAccount(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
 func (r *AccountRepo) Delete(ctx context.Context, id int64) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM account WHERE id = $1`, id)
 	return err
@@ -105,7 +151,8 @@ func scanAccount(row rowScanner) (*Account, error) {
 	var a Account
 	if err := row.Scan(&a.ID, &a.GoogleSub, &a.Email, &a.RefreshTokenSealed,
 		&a.AccessTokenSealed, &a.AccessTokenExpiresAt, &a.PrimaryCalendarID, &a.CreatedAt,
-		&a.WorkingHours, &a.PersonalHours, &a.MeetingHours); err != nil {
+		&a.WorkingHours, &a.PersonalHours, &a.MeetingHours,
+		&a.NeedsReauth, &a.ReauthReason, &a.ReauthDetectedAt); err != nil {
 		return nil, err
 	}
 	return &a, nil

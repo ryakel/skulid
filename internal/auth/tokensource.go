@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -52,6 +53,15 @@ func (a *AccountTokenSource) Token() (*oauth2.Token, error) {
 	src := a.provider.Config().TokenSource(ctx, tok)
 	fresh, err := src.Token()
 	if err != nil {
+		// A revoked or expired grant never recovers on its own. Record it so
+		// the UI can ask for a reconnect instead of letting every background
+		// job fail into the log forever.
+		if failure := ClassifyRefreshError(err); failure.Permanent {
+			if markErr := a.accounts.MarkNeedsReauth(ctx, a.accountID, failure.Reason); markErr != nil {
+				return nil, fmt.Errorf("refresh failed (%w) and flagging the account failed: %v", err, markErr)
+			}
+			return nil, fmt.Errorf("account %d needs reauthorization: %w", a.accountID, err)
+		}
 		return nil, err
 	}
 	if a.current == nil || fresh.AccessToken != a.current.AccessToken {
@@ -74,9 +84,17 @@ func (a *AccountTokenSource) Token() (*oauth2.Token, error) {
 		}
 	}
 	a.current = fresh
+
+	// The refresh worked, so any previously recorded lockout is stale.
+	if acct.NeedsReauth {
+		if err := a.accounts.ClearNeedsReauth(ctx, a.accountID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Defensive: never hand back an already-expired token.
 	if !fresh.Expiry.IsZero() && time.Now().After(fresh.Expiry) {
-		return nil, &oauth2.RetrieveError{}
+		return nil, fmt.Errorf("account %d: refreshed token is already expired at %s", a.accountID, fresh.Expiry)
 	}
 	return fresh, nil
 }
