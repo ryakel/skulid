@@ -25,6 +25,7 @@ type Toolbox struct {
 	calendars      *db.CalendarRepo
 	audit          *db.AuditRepo
 	tasks          *db.TaskRepo
+	taskChunks     *db.TaskChunkRepo
 	habits         *db.HabitRepo
 	occurrences    *db.HabitOccurrenceRepo
 	scheduler      *syncengine.Scheduler
@@ -33,13 +34,14 @@ type Toolbox struct {
 }
 
 func NewToolbox(accounts *db.AccountRepo, calendars *db.CalendarRepo, audit *db.AuditRepo,
-	tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
+	tasks *db.TaskRepo, taskChunks *db.TaskChunkRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
 	scheduler *syncengine.Scheduler, clientFor syncengine.ClientFor, conversationID int64) *Toolbox {
 	return &Toolbox{
 		accounts:       accounts,
 		calendars:      calendars,
 		audit:          audit,
 		tasks:          tasks,
+		taskChunks:     taskChunks,
 		habits:         habits,
 		occurrences:    occurrences,
 		scheduler:      scheduler,
