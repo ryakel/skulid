@@ -203,3 +203,82 @@ func TestAssignEventLanesAdjacentNotOverlapping(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePlannerWindow(t *testing.T) {
+	cases := []struct {
+		in    string
+		want  plannerWindow
+		valid bool
+	}{
+		{"6,22", plannerWindow{6, 22}, true},
+		{" 0 , 24 ", plannerWindow{0, 24}, true},
+		{"8,9", plannerWindow{8, 9}, true},
+		{"", plannerWindow{}, false},
+		{"6", plannerWindow{}, false},
+		{"6,", plannerWindow{}, false},
+		{",22", plannerWindow{}, false},
+		{"six,ten", plannerWindow{}, false},
+		{"-1,22", plannerWindow{}, false},
+		{"6,25", plannerWindow{}, false},
+		{"22,6", plannerWindow{}, false},
+		{"9,9", plannerWindow{}, false},
+	}
+	for _, c := range cases {
+		got, ok := parsePlannerWindow(c.in)
+		if ok != c.valid {
+			t.Errorf("parsePlannerWindow(%q): ok=%v, want %v", c.in, ok, c.valid)
+			continue
+		}
+		if ok && got != c.want {
+			t.Errorf("parsePlannerWindow(%q) = %+v, want %+v", c.in, got, c.want)
+		}
+	}
+}
+
+func TestPlannerWindowRoundTrip(t *testing.T) {
+	// A window's String() must parse back to itself — the prefs handler
+	// stores String() and every render parses it.
+	for _, w := range []plannerWindow{{6, 22}, {0, 24}, {5, 23}} {
+		got, ok := parsePlannerWindow(w.String())
+		if !ok || got != w {
+			t.Errorf("round trip %+v -> %q -> %+v (ok=%v)", w, w.String(), got, ok)
+		}
+	}
+}
+
+func TestPlannerWindowSpans(t *testing.T) {
+	w := plannerWindow{6, 22}
+	if w.SpanHours() != 16 {
+		t.Errorf("SpanHours = %d, want 16", w.SpanHours())
+	}
+	if w.SpanMins() != 960 {
+		t.Errorf("SpanMins = %d, want 960", w.SpanMins())
+	}
+	// One label per hour boundary, inclusive of both ends.
+	if w.HourRowCount() != 17 {
+		t.Errorf("HourRowCount = %d, want 17", w.HourRowCount())
+	}
+}
+
+func TestPlaceTimedRespectsConfiguredWindow(t *testing.T) {
+	// An 05:30 event is outside the 6-22 default but inside a 5-23 window.
+	day := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	start := day.Add(5*time.Hour + 30*time.Minute)
+	end := start.Add(30 * time.Minute)
+
+	days := []plannerDay{{Date: day}}
+	placeTimed(days, start, end, "early", "", "", "", "", "", time.UTC, defaultPlannerWindow)
+	if len(days[0].Timed) != 0 {
+		t.Fatalf("05:30 event should be dropped by the 6-22 window; got %d", len(days[0].Timed))
+	}
+
+	days = []plannerDay{{Date: day}}
+	placeTimed(days, start, end, "early", "", "", "", "", "", time.UTC, plannerWindow{5, 23})
+	if len(days[0].Timed) != 1 {
+		t.Fatalf("05:30 event should render in a 5-23 window; got %d", len(days[0].Timed))
+	}
+	// 30 minutes into an 18-hour window.
+	if got := days[0].Timed[0].TopPct; got < 2.7 || got > 2.8 {
+		t.Errorf("TopPct = %v, want ~2.78 (30min of 1080)", got)
+	}
+}

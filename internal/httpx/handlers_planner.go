@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	gcal "google.golang.org/api/calendar/v3"
@@ -16,13 +17,17 @@ import (
 	"github.com/ryakel/skulid/internal/db"
 )
 
-// plannerWindow is the visible vertical range each day. 6am-10pm covers most
-// people's working + personal commitment hours without making blocks too tiny.
+// The default visible vertical range each day. 6am-10pm covers most people's
+// working + personal commitment hours without making blocks too tiny; the
+// operator can widen or narrow it from the planner prefs form.
 const (
 	plannerStartHour = 6
 	plannerEndHour   = 22
-	plannerSpanMins  = (plannerEndHour - plannerStartHour) * 60
 	plannerTimeout   = 90 * time.Second
+	// One calendar's fetch may not hold up the whole page: each gets its own
+	// deadline, and only this many run at once.
+	plannerCalendarTimeout = 15 * time.Second
+	plannerFetchWorkers    = 8
 )
 
 // PlannerView enumerates the supported view modes. Day/3-day/week share the
@@ -93,12 +98,133 @@ type plannerCategoryTotal struct {
 	Hours float64 // total hours scheduled this week
 }
 
+// plannerWindow is the visible vertical range of a day column: events outside
+// it aren't rendered, and TopPct/HeightPct are percentages of its span.
+type plannerWindow struct {
+	StartHour int
+	EndHour   int
+}
+
+var defaultPlannerWindow = plannerWindow{StartHour: plannerStartHour, EndHour: plannerEndHour}
+
+// SpanMins is the height of the window in minutes — the denominator for every
+// event's vertical placement.
+func (w plannerWindow) SpanMins() int { return (w.EndHour - w.StartHour) * 60 }
+
+// SpanHours is the number of hour bands the day column is divided into.
+func (w plannerWindow) SpanHours() int { return w.EndHour - w.StartHour }
+
+// HourRowCount is how many hour labels the rail carries: one per boundary,
+// inclusive of both ends, so a 6-22 window shows 17.
+func (w plannerWindow) HourRowCount() int { return w.SpanHours() + 1 }
+
+// parsePlannerWindow reads the stored "start,end" pair (hours of the day, end
+// exclusive of nothing — 22 means the rail's last label is 10pm). Anything
+// malformed or degenerate is rejected rather than silently clamped, so the
+// prefs form can report it and the renderer can fall back to the default.
+func parsePlannerWindow(v string) (plannerWindow, bool) {
+	start, end, ok := strings.Cut(strings.TrimSpace(v), ",")
+	if !ok {
+		return plannerWindow{}, false
+	}
+	sh, err := strconv.Atoi(strings.TrimSpace(start))
+	if err != nil {
+		return plannerWindow{}, false
+	}
+	eh, err := strconv.Atoi(strings.TrimSpace(end))
+	if err != nil {
+		return plannerWindow{}, false
+	}
+	if sh < 0 || eh > 24 || eh-sh < 1 {
+		return plannerWindow{}, false
+	}
+	return plannerWindow{StartHour: sh, EndHour: eh}, true
+}
+
+func (w plannerWindow) String() string {
+	return strconv.Itoa(w.StartHour) + "," + strconv.Itoa(w.EndHour)
+}
+
+// resolvePlannerWindow returns the operator's configured day window, falling
+// back to 6am-10pm when unset or unparseable.
+func (s *Server) resolvePlannerWindow(ctx context.Context) plannerWindow {
+	if v, ok, _ := s.Settings.Get(ctx, db.SettingPlannerDayWindow); ok {
+		if w, ok := parsePlannerWindow(v); ok {
+			return w
+		}
+	}
+	return defaultPlannerWindow
+}
+
+// plannerCalendarEvents is one calendar's slice of the visible range. Fetches
+// run concurrently, so events carry their calendar with them rather than
+// going through a shared pointer map.
+type plannerCalendarEvents struct {
+	Cal    db.Calendar
+	Events []*gcal.Event
+}
+
+// fetchPlannerEvents pulls the visible range from every enabled calendar
+// concurrently. Each fetch gets its own deadline so a single slow or wedged
+// calendar degrades only itself instead of holding up first paint, and the
+// worker count is bounded so a many-calendar account doesn't open twenty
+// simultaneous connections to Google.
+//
+// Results come back in `cals` order regardless of completion order, so the
+// page renders deterministically.
+func (s *Server) fetchPlannerEvents(ctx context.Context, cals []db.Calendar, rangeStart, rangeEnd time.Time) []plannerCalendarEvents {
+	enabled := make([]db.Calendar, 0, len(cals))
+	for _, cal := range cals {
+		if cal.Enabled {
+			enabled = append(enabled, cal)
+		}
+	}
+	if len(enabled) == 0 {
+		return nil
+	}
+
+	out := make([]plannerCalendarEvents, len(enabled))
+	sem := make(chan struct{}, plannerFetchWorkers)
+	var wg sync.WaitGroup
+
+	for i, cal := range enabled {
+		wg.Add(1)
+		go func(i int, cal db.Calendar) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			out[i] = plannerCalendarEvents{Cal: cal}
+
+			cli, err := s.ClientFor(ctx, cal.AccountID)
+			if err != nil {
+				return
+			}
+			calCtx, cancel := context.WithTimeout(ctx, plannerCalendarTimeout)
+			defer cancel()
+
+			resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
+				Context(calCtx).SingleEvents(true).
+				TimeMin(rangeStart.Format(time.RFC3339)).
+				TimeMax(rangeEnd.Format(time.RFC3339)).
+				MaxResults(500).OrderBy("startTime").Do()
+			if err != nil {
+				return
+			}
+			out[i].Events = resp.Items
+		}(i, cal)
+	}
+	wg.Wait()
+	return out
+}
+
 func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), plannerTimeout)
 	defer cancel()
 
 	loc := s.plannerLocation(ctx)
 	weekStartDay := s.plannerWeekStartDay(ctx)
+	win := s.resolvePlannerWindow(ctx)
 	view := s.resolveView(ctx, r.URL.Query().Get("view"))
 	anchor := parseAnchor(r.URL.Query().Get("at"), loc)
 	// Backwards compat: an old `?w=` query still works for the week view.
@@ -123,68 +249,47 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 
 	calendars, _ := s.Calendars.ListAll(ctx)
 
-	// Pull events per calendar — skip disabled ones. Sequential; ~20 cals is fine.
-	var allEvents []*gcal.Event
-	calByEvent := map[*gcal.Event]db.Calendar{}
-	for _, cal := range calendars {
-		if !cal.Enabled {
-			continue
-		}
-		cli, err := s.ClientFor(ctx, cal.AccountID)
-		if err != nil {
-			continue
-		}
-		resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
-			Context(ctx).SingleEvents(true).
-			TimeMin(rangeStart.Format(time.RFC3339)).
-			TimeMax(rangeEnd.Format(time.RFC3339)).
-			MaxResults(500).OrderBy("startTime").Do()
-		if err != nil {
-			continue
-		}
-		for _, ev := range resp.Items {
-			allEvents = append(allEvents, ev)
-			calByEvent[ev] = cal
-		}
-	}
+	fetched := s.fetchPlannerEvents(ctx, calendars, rangeStart, rangeEnd)
 
 	// Build per-day buckets across the visible range.
 	days := buildDays(rangeStart, rangeEnd, loc)
 	totals := map[string]float64{}
-	for _, ev := range allEvents {
-		if ev.Status == "cancelled" {
-			continue
-		}
-		cal := calByEvent[ev]
-		ctx := category.Context{
-			OwnerDomains:        ownerDomains,
-			CalendarDefaultSlug: defaultCategorySlug(cal, catBySlug),
-		}
-		slug := category.Classify(ev, ctx)
-		cat := catBySlug[slug]
-		isAllDay := ev.Start != nil && ev.Start.DateTime == "" && ev.Start.Date != ""
-		if isAllDay {
-			placeAllDay(days, ev, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
-			continue
-		}
-		start, end, ok := timedBounds(ev, loc)
-		if !ok {
-			continue
-		}
-		// Skip events entirely outside the visible range.
-		if !end.After(rangeStart) || !start.Before(rangeEnd) {
-			continue
-		}
-		clipS, clipE := start, end
-		if clipS.Before(rangeStart) {
-			clipS = rangeStart
-		}
-		if clipE.After(rangeEnd) {
-			clipE = rangeEnd
-		}
-		totals[slug] += clipE.Sub(clipS).Hours()
+	for _, f := range fetched {
+		cal := f.Cal
+		for _, ev := range f.Events {
+			if ev.Status == "cancelled" {
+				continue
+			}
+			ctx := category.Context{
+				OwnerDomains:        ownerDomains,
+				CalendarDefaultSlug: defaultCategorySlug(cal, catBySlug),
+			}
+			slug := category.Classify(ev, ctx)
+			cat := catBySlug[slug]
+			isAllDay := ev.Start != nil && ev.Start.DateTime == "" && ev.Start.Date != ""
+			if isAllDay {
+				placeAllDay(days, ev, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
+				continue
+			}
+			start, end, ok := timedBounds(ev, loc)
+			if !ok {
+				continue
+			}
+			// Skip events entirely outside the visible range.
+			if !end.After(rangeStart) || !start.Before(rangeEnd) {
+				continue
+			}
+			clipS, clipE := start, end
+			if clipS.Before(rangeStart) {
+				clipS = rangeStart
+			}
+			if clipE.After(rangeEnd) {
+				clipE = rangeEnd
+			}
+			totals[slug] += clipE.Sub(clipS).Hours()
 
-		placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
+			placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc, win)
+		}
 	}
 
 	// Sort each day's timed events and assign overlap lanes.
@@ -208,8 +313,8 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	hourLabels := make([]string, 0, plannerEndHour-plannerStartHour+1)
-	for h := plannerStartHour; h <= plannerEndHour; h++ {
+	hourLabels := make([]string, 0, win.HourRowCount())
+	for h := win.StartHour; h <= win.EndHour; h++ {
 		hourLabels = append(hourLabels, formatHour(h))
 	}
 
@@ -237,6 +342,10 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 	data["RangeLabel"] = label
 	data["Days"] = days
 	data["HourLabels"] = hourLabels
+	data["HourRowCount"] = win.HourRowCount()
+	data["SpanHours"] = win.SpanHours()
+	data["DayStartHour"] = win.StartHour
+	data["DayEndHour"] = win.EndHour
 	data["CategoryTotals"] = catTotals
 	data["PrevAt"] = prevAt.Format("2006-01-02")
 	data["NextAt"] = nextAt.Format("2006-01-02")
@@ -363,6 +472,23 @@ func (s *Server) handlePlannerPrefs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Empty means "use the default", same as the other three prefs. A partial
+	// pair is a mistake, not a default, so reject it rather than half-applying.
+	dayStart := strings.TrimSpace(r.FormValue("day_start"))
+	dayEnd := strings.TrimSpace(r.FormValue("day_end"))
+	dayWindow := ""
+	if dayStart != "" || dayEnd != "" {
+		win, ok := parsePlannerWindow(dayStart + "," + dayEnd)
+		if !ok {
+			http.Error(w, "day start/end must be whole hours 0..24 with end after start", http.StatusBadRequest)
+			return
+		}
+		dayWindow = win.String()
+	}
+	if err := s.Settings.Set(r.Context(), db.SettingPlannerDayWindow, dayWindow); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, "/planner", http.StatusFound)
 }
 
@@ -461,7 +587,7 @@ func buildDays(start, end time.Time, loc *time.Location) []plannerDay {
 	return out
 }
 
-func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, catColor, calColor, calName string, loc *time.Location) {
+func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, catColor, calColor, calName string, loc *time.Location, win plannerWindow) {
 	// Iterate days the event covers. For each day, clip to the planner window
 	// and emit a block; this handles overnight events cleanly.
 	for i := range days {
@@ -478,11 +604,11 @@ func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, c
 		if clipE.After(dayEnd) {
 			clipE = dayEnd
 		}
-		windowStart := dayStart.Add(time.Duration(plannerStartHour) * time.Hour)
-		windowEnd := dayStart.Add(time.Duration(plannerEndHour) * time.Hour)
+		windowStart := dayStart.Add(time.Duration(win.StartHour) * time.Hour)
+		windowEnd := dayStart.Add(time.Duration(win.EndHour) * time.Hour)
 		if !clipE.After(windowStart) || !clipS.Before(windowEnd) {
-			// Outside the visible 6am-10pm — drop. (Could spill into a "before
-			// 6am / after 10pm" indicator in a future iteration.)
+			// Outside the visible window — drop. (Could spill into a
+			// "before / after" indicator in a future iteration.)
 			continue
 		}
 		visS := clipS
@@ -513,8 +639,8 @@ func placeTimed(days []plannerDay, start, end time.Time, title, slug, catName, c
 			CategoryColor: catColor,
 			CalendarColor: eventColor,
 			CalendarName:  calName,
-			TopPct:        100 * topMins / float64(plannerSpanMins),
-			HeightPct:     100 * heightMins / float64(plannerSpanMins),
+			TopPct:        100 * topMins / float64(win.SpanMins()),
+			HeightPct:     100 * heightMins / float64(win.SpanMins()),
 			Short:         clipE.Sub(clipS) <= 30*time.Minute,
 		})
 	}

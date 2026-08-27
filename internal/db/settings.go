@@ -15,15 +15,18 @@ const (
 	SettingSchemaVersion  = "schema_version"
 	// Buffer minutes — comma-separated `task_habit_break,decompression,travel`,
 	// e.g. "30,30,30". Single string so we don't need a new table for one row.
-	SettingBuffers        = "buffers"
+	SettingBuffers = "buffers"
 	// Planner preferences. PlannerTimezone is an IANA name (defaults to the
 	// first connected account's working-hours timezone, then UTC); the
 	// week-start is "0".."6" with Sunday=0 per Go's time.Weekday convention.
 	// PlannerDefaultView is "day" / "3day" / "week" / "month" (defaults to
 	// "week" when unset).
-	SettingPlannerTimezone   = "planner_timezone"
-	SettingPlannerWeekStart  = "planner_week_start"
+	SettingPlannerTimezone    = "planner_timezone"
+	SettingPlannerWeekStart   = "planner_week_start"
 	SettingPlannerDefaultView = "planner_default_view"
+	// The visible vertical range of a planner day column, as "startHour,endHour"
+	// in 24-hour time (defaults to "6,22"). Events outside it aren't rendered.
+	SettingPlannerDayWindow = "planner_day_window"
 )
 
 type SettingRepo struct {

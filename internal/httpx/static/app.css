@@ -504,7 +504,9 @@ table.categories input[type=color] {
 .planner-hours {
   border-right: 1px solid var(--hairline);
   position: relative; min-height: 720px;
-  display: grid; grid-template-rows: repeat(17, 1fr);
+  /* --hour-rows / --hours are set inline by the timeline template from the
+     configured day window; the fallbacks match the 6am-10pm default. */
+  display: grid; grid-template-rows: repeat(var(--hour-rows, 17), 1fr);
 }
 .planner-hour {
   font-size: .65rem; color: var(--muted); padding: 0 .45rem;
@@ -517,9 +519,9 @@ table.categories input[type=color] {
   border-right: 1px solid var(--hairline);
   background-image: repeating-linear-gradient(to bottom,
     transparent 0,
-    transparent calc(100% / 16 - 1px),
-    var(--hairline-soft) calc(100% / 16 - 1px),
-    var(--hairline-soft) calc(100% / 16));
+    transparent calc(100% / var(--hours, 16) - 1px),
+    var(--hairline-soft) calc(100% / var(--hours, 16) - 1px),
+    var(--hairline-soft) calc(100% / var(--hours, 16)));
 }
 .planner-day:last-child { border-right: none; }
 .planner-day.is-today { background-color: rgba(17,17,17,.015); }
