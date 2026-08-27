@@ -72,6 +72,7 @@ through it.
 | `task`               | One-shot scheduled work; priority + duration + due + scheduled placement |
 | `habit`              | Recurring soft block (e.g. Lunch); ideal_time + flex + days_of_week    |
 | `habit_occurrence`   | Per-day instance of a habit (event id + window)                        |
+| `task_chunk`         | One calendar block of a task; a long task has several                  |
 | `buffer_event`       | Tracks visible Decompress and Travel buffers around non-managed meetings |
 | `audit_log`          | What skulid did and why                                                |
 | `ai_conversation`    | One AI assistant chat (30-day TTL)                                     |
