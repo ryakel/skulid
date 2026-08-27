@@ -71,10 +71,12 @@ go test ./...
 go test -race -count=1 ./...
 ```
 
-The test suite covers pure logic (filter, transform, smart-block
-helpers, crypto, sessions, calendar managed-event helpers, httpx
-helpers, renderer smoke test). Integration tests against Postgres and
-Google are deferred — see [#integration-tests-are-deferred](#integration-tests-are-deferred).
+The default run covers pure logic (filter, transform, smart-block
+helpers, slot finders, crypto, sessions, calendar managed-event
+helpers, httpx helpers, renderer smoke test). Postgres-backed tests
+also live in the suite but skip unless you point them at a server —
+see [#integration-tests](#integration-tests). Driving the rule engine
+against a fake Google client is still outstanding (SKUL-23).
 
 ## Security scanning
 
@@ -173,16 +175,42 @@ wiki/                 # this documentation, synced to GitHub Wiki
 4. Update [AI Assistant](AI-Assistant) docs with the new tool's
    behavior.
 
-## Integration tests are deferred
+## Integration tests
 
-We deliberately don't run integration tests against Postgres or the
-real Google API in CI. To get there:
+Postgres-backed tests live in `internal/db/*_integration_test.go` and
+run in CI against a `postgres:16` service container. They exist because
+every repo is hand-written SQL with no compile-time checking — a column
+added to a table but missed in a select list is a runtime failure on
+every read — and because migrations `0011` and `0012` once reached
+production having never been run against a real server.
 
-- Postgres: `dockertest` or Testcontainers, gated behind a build tag.
-- Google: refactor `*calendar.Client` into an interface so a fake can
-  be injected, then assert the rule engine's behavior end-to-end.
+Each test creates a database of its own, runs every migration from
+scratch, and drops it again on cleanup. So the whole migration chain is
+exercised on every run, and `TestMigrationsAreReversible` additionally
+runs every `Down` and then every `Up` again, which is where a
+hand-written rename goes wrong.
 
-Both are good first PRs.
+They're gated on an environment variable rather than a build tag:
+
+```bash
+# any Postgres you don't mind the suite creating and dropping databases in
+export SKULID_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable'
+go test -race -count=1 ./...
+```
+
+Unset it and they skip, so `go test ./...` stays fast and needs nothing
+installed. A build tag would have worked too, but a build-tagged file
+stops compiling the moment someone renames a repo method and nobody
+notices until they next run with the tag; this way the file compiles on
+every build and only its execution is conditional.
+
+The DSN should point at a database you're happy for the suite to create
+and drop databases *next to* — it connects there as an admin and works
+in throwaway databases named after each test.
+
+The Google half is still outstanding: `*calendar.Client` needs to become
+an interface so a fake can be injected and the rule engine driven
+end-to-end. Tracked as SKUL-23.
 
 ## Wiki
 
