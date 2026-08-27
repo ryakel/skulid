@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -24,6 +26,10 @@ type Config struct {
 	// and a banner on every page when on. Never set in production.
 	DevAuthBypass bool
 	DevUserEmail  string
+
+	// AuditRetention is how long audit_log rows are kept. Zero disables the
+	// prune. Configured in whole days via AUDIT_RETENTION_DAYS.
+	AuditRetention time.Duration
 
 	// InsecureFindings lists the ways this configuration is unsafe for
 	// production. Non-empty only when the operator explicitly opted in via
@@ -50,6 +56,10 @@ func Load() (*Config, error) {
 		DevAuthBypass:      isTruthy(os.Getenv("SKULID_DEV_AUTH_BYPASS")),
 		DevUserEmail:       envOr("SKULID_DEV_USER_EMAIL", "dev@local"),
 	}
+
+	// 90 days: long enough to answer "why did this event vanish last month",
+	// short enough to bound growth in the busiest table in the schema.
+	c.AuditRetention = time.Duration(envInt("AUDIT_RETENTION_DAYS", 90)) * 24 * time.Hour
 
 	sessionSecret := os.Getenv("SESSION_SECRET")
 	if sessionSecret == "" {
@@ -102,6 +112,21 @@ func Load() (*Config, error) {
 
 func (c *Config) RedirectURL() string {
 	return c.ExternalURL + "/auth/google/callback"
+}
+
+// envInt reads a whole-number env var. An unset, empty or unparseable value
+// falls back to the default rather than failing startup -- a typo in a tuning
+// knob should not stop the daemon, and 0 remains meaningful (it disables).
+func envInt(k string, def int) int {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
 }
 
 func envOr(k, def string) string {

@@ -49,6 +49,28 @@ channel and creates a new one for every calendar.
 
 For deeper inspection, the table is `audit_log` in Postgres.
 
+### Retention
+
+`audit_log` is the highest-churn table in the schema — smart-block and
+decompression recompute both re-diff on every sync, so a busy calendar
+appends rows continuously. Since the UI only ever shows the last 200,
+everything older is pure disk.
+
+Rows older than **90 days** are pruned automatically, on the same 6-hourly
+tick as the AI conversation cleanup. Change the window with
+`AUDIT_RETENTION_DAYS`; set it to `0` to disable pruning and keep everything.
+
+The prune deletes in batches of 5,000 rather than one statement, so the first
+run against a table that has already grown for a year doesn't hold locks or
+bloat WAL. In steady state it's a single statement touching almost nothing.
+
+To see how much is there:
+
+```bash
+docker compose exec db psql -U skulid -d skulid \
+  -c "select count(*), min(ts), max(ts) from audit_log;"
+```
+
 ## Logs
 
 The daemon writes structured JSON logs to stdout:
