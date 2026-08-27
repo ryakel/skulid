@@ -16,13 +16,24 @@ Google account connected and one sync rule firing.
 
 ## 1. Create a Google OAuth client
 
-1. Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
-2. Create or pick a project.
-3. Configure the **OAuth consent screen** — see
+OAuth setup lives under **Google Auth Platform**, its own top-level section
+in the Cloud Console. It used to be "OAuth consent screen" under APIs &
+Services; if a guide anywhere sends you there, it predates the move.
+
+The section has four tabs — **Branding**, **Audience**, **Data Access**,
+**Clients** — and the steps below say which one each setting is on, because
+Google keeps rearranging the click-path but the tabs have been stable.
+
+1. Create or pick a project in the
+   [Google Cloud Console](https://console.cloud.google.com/).
+2. Open [Google Auth Platform](https://console.cloud.google.com/auth/overview).
+   On a new project this opens a **Get started** wizard; fill in an app name
+   and support email and finish it.
+3. On the **Audience** tab, choose **Internal** or **External** — see
    [Publishing status: the one setting that matters](#publishing-status-the-one-setting-that-matters)
-   directly below. Getting this wrong breaks skulid one week later,
-   so read it before you click.
-4. **Create credentials → OAuth client ID → Web application**.
+   directly below. Getting this wrong breaks skulid one week later, so read
+   it before you click.
+4. On the **Clients** tab: **Create client → Web application**.
 5. Authorized redirect URIs: add `https://YOUR.PUBLIC.HOST/auth/google/callback`.
 6. Copy the **client ID** and **client secret**.
 7. Under **APIs & Services → Library**, enable the **Google Calendar API**
@@ -43,8 +54,8 @@ on your app's **publishing status** — not on whether the app is
 The **"Google hasn't verified this app"** screen is a separate thing, and
 it is not a symptom of any of this. It appears whenever an External app is
 unverified — in Testing and In production alike — so seeing it tells you
-nothing about your publishing status. Don't diagnose from it; open the
-consent screen and read the status directly.
+nothing about your publishing status. Don't diagnose from it: open
+**Google Auth Platform → Audience** and read the status directly.
 
 Pick whichever of these two matches your accounts:
 
@@ -62,22 +73,25 @@ user cap, no verification.
 
 **If you need to connect even one consumer `@gmail.com` account**,
 Internal will refuse it. Choose **External**, then click **Publish app**
-on the consent screen so the status reads *In production*. Leave it
+on the **Audience** tab so the status reads *In production*. Leave it
 unverified.
 
 You do **not** need to submit the app for Google verification. skulid
-asks only for the Calendar scope, which Google classifies as *sensitive*,
-not *restricted* — so no security audit or CASA assessment applies. The
-consequences of staying unverified are exactly two, and neither matters
-for a single-user install:
+requests four scopes — `openid`, `email`, `profile` and
+`https://www.googleapis.com/auth/calendar`. The first three are
+non-sensitive; Calendar is the only *sensitive* one, and none are
+*restricted* (that tier is Gmail, most of Drive, and Chat), so no security
+audit or CASA assessment applies. The consequences of staying unverified
+are exactly two, and neither matters for a single-user install:
 
 - Each account sees a **"Google hasn't verified this app"** interstitial
   the first time it connects. Click **Advanced → Go to skulid (unsafe)**.
   It appears once per account, not once per sync. The wording is aimed at
   people being phished by a stranger's app; this is your OAuth client,
   your code, on your own box.
-- The project is capped at **100 authorized users for its lifetime**. You
-  will use one or two.
+- The project is capped at **100 authorized users for its lifetime**. That
+  cap is per project and cannot be reset — a new OAuth client in the same
+  project does not clear it. You will use one or two.
 
 Submitting for verification would remove the interstitial, but it means
 publishing a privacy policy and homepage on a domain you own and waiting
