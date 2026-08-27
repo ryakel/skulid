@@ -31,6 +31,10 @@ func NewManagedWindowRepo(pool *pgxpool.Pool) *ManagedWindowRepo {
 // so the same answer is available locally for the cost of one query and no
 // Google API calls at all.
 //
+// Tasks come from task_chunk rather than task.scheduled_*: a task can occupy
+// several blocks, and reading only the summary columns would leave its later
+// chunks reading as busy against itself.
+//
 // Travel buffers are deliberately absent. A decompression block is subtracted
 // because the protection it represents is already applied a second way -- the
 // scheduler pads every busy window by the decompression minutes -- so counting
@@ -50,11 +54,8 @@ func (r *ManagedWindowRepo) InRange(ctx context.Context, from, to time.Time) ([]
 		SELECT starts_at, ends_at FROM buffer_event
 		WHERE buffer_type = 'decompression' AND ends_at > $1 AND starts_at < $2
 		UNION ALL
-		SELECT scheduled_starts_at, scheduled_ends_at FROM task
-		WHERE scheduled_starts_at IS NOT NULL
-		  AND scheduled_ends_at IS NOT NULL
-		  AND scheduled_ends_at > $1
-		  AND scheduled_starts_at < $2`, from, to)
+		SELECT starts_at, ends_at FROM task_chunk
+		WHERE ends_at > $1 AND starts_at < $2`, from, to)
 	if err != nil {
 		return nil, err
 	}

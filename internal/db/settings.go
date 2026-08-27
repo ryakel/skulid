@@ -27,6 +27,10 @@ const (
 	// The visible vertical range of a planner day column, as "startHour,endHour"
 	// in 24-hour time (defaults to "6,22"). Events outside it aren't rendered.
 	SettingPlannerDayWindow = "planner_day_window"
+	// Shortest piece a long task may be split into, in minutes (defaults to
+	// 30). Keeps an eight-hour task from shattering into a dozen fragments
+	// wedged between meetings.
+	SettingTaskMinChunkMinutes = "task_min_chunk_minutes"
 )
 
 type SettingRepo struct {

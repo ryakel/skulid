@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,7 +16,7 @@ func NewTaskRepo(pool *pgxpool.Pool) *TaskRepo { return &TaskRepo{pool: pool} }
 
 const taskSelectCols = `id, title, notes, priority, duration_minutes, due_at, status,
 	       target_calendar_id, category_id, scheduled_event_id,
-	       scheduled_starts_at, scheduled_ends_at, created_at, updated_at`
+	       scheduled_starts_at, scheduled_ends_at, schedule_note, created_at, updated_at`
 
 func (r *TaskRepo) Create(ctx context.Context, t *Task) (int64, error) {
 	if t.Priority == "" {
@@ -48,12 +49,15 @@ func (r *TaskRepo) Update(ctx context.Context, t *Task) error {
 	return err
 }
 
-func (r *TaskRepo) UpdateScheduled(ctx context.Context, id int64, eventID string, starts, ends *time.Time, status string) error {
+// UpdateScheduled writes the summary of a task's placement: the first chunk's
+// event and window, the resulting status, and why it is where it is. `note`
+// is empty on success and carries the reason when nothing could be placed.
+func (r *TaskRepo) UpdateScheduled(ctx context.Context, id int64, eventID string, starts, ends *time.Time, status, note string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE task SET scheduled_event_id = $2, scheduled_starts_at = $3,
-		    scheduled_ends_at = $4, status = $5, updated_at = NOW()
+		    scheduled_ends_at = $4, status = $5, schedule_note = $6, updated_at = NOW()
 		WHERE id = $1`,
-		id, eventID, starts, ends, status)
+		id, eventID, starts, ends, status, note)
 	return err
 }
 
@@ -132,8 +136,29 @@ func scanTask(row rowScanner) (*Task, error) {
 	if err := row.Scan(&t.ID, &t.Title, &t.Notes, &t.Priority, &t.DurationMinutes,
 		&t.DueAt, &t.Status, &t.TargetCalendarID, &t.CategoryID,
 		&t.ScheduledEventID, &t.ScheduledStartsAt, &t.ScheduledEndsAt,
-		&t.CreatedAt, &t.UpdatedAt); err != nil {
+		&t.ScheduleNote, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// DefaultTaskMinChunkMinutes is how short a piece of a split task may be when
+// the operator hasn't said otherwise. Long enough to get something done, short
+// enough to fit between meetings.
+const DefaultTaskMinChunkMinutes = 30
+
+// TaskMinChunkMinutes resolves the configured minimum block length for a split
+// task, falling back to the default when unset or unparseable.
+func TaskMinChunkMinutes(ctx context.Context, r *SettingRepo) int {
+	if r == nil {
+		return DefaultTaskMinChunkMinutes
+	}
+	v, ok, err := r.Get(ctx, SettingTaskMinChunkMinutes)
+	if err != nil || !ok {
+		return DefaultTaskMinChunkMinutes
+	}
+	if n := atoiOr(strings.TrimSpace(v), 0); n > 0 {
+		return n
+	}
+	return DefaultTaskMinChunkMinutes
 }
