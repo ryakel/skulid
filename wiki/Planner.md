@@ -50,6 +50,14 @@ hours of that account at **Settings → Hours**.
 ## Performance
 
 The handler issues one `Events.list` per connected calendar per page
-load — typically <20 calls, parallel-friendly but currently
-sequential. Consider a 2-second wait normal on first paint; subsequent
-loads are faster as Google's HTTP cache warms.
+load — typically <20 calls. They run concurrently, up to 8 at a time,
+so first paint costs roughly one round trip rather than one per
+calendar. Subsequent loads are faster still as Google's HTTP cache
+warms.
+
+Each calendar's fetch carries its own 15-second deadline. A calendar
+that is slow, rate-limited or unreachable drops out of that render and
+the rest of the page still paints — you will see the other calendars'
+events and a gap where that one's would have been. Reload once the
+underlying problem clears; nothing is cached in skulid, so the next
+render picks it up.

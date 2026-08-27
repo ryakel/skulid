@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	gcal "google.golang.org/api/calendar/v3"
@@ -23,6 +24,10 @@ const (
 	plannerEndHour   = 22
 	plannerSpanMins  = (plannerEndHour - plannerStartHour) * 60
 	plannerTimeout   = 90 * time.Second
+	// One calendar's fetch may not hold up the whole page: each gets its own
+	// deadline, and only this many run at once.
+	plannerCalendarTimeout = 15 * time.Second
+	plannerFetchWorkers    = 8
 )
 
 // PlannerView enumerates the supported view modes. Day/3-day/week share the
@@ -93,6 +98,68 @@ type plannerCategoryTotal struct {
 	Hours float64 // total hours scheduled this week
 }
 
+// plannerCalendarEvents is one calendar's slice of the visible range. Fetches
+// run concurrently, so events carry their calendar with them rather than
+// going through a shared pointer map.
+type plannerCalendarEvents struct {
+	Cal    db.Calendar
+	Events []*gcal.Event
+}
+
+// fetchPlannerEvents pulls the visible range from every enabled calendar
+// concurrently. Each fetch gets its own deadline so a single slow or wedged
+// calendar degrades only itself instead of holding up first paint, and the
+// worker count is bounded so a many-calendar account doesn't open twenty
+// simultaneous connections to Google.
+//
+// Results come back in `cals` order regardless of completion order, so the
+// page renders deterministically.
+func (s *Server) fetchPlannerEvents(ctx context.Context, cals []db.Calendar, rangeStart, rangeEnd time.Time) []plannerCalendarEvents {
+	enabled := make([]db.Calendar, 0, len(cals))
+	for _, cal := range cals {
+		if cal.Enabled {
+			enabled = append(enabled, cal)
+		}
+	}
+	if len(enabled) == 0 {
+		return nil
+	}
+
+	out := make([]plannerCalendarEvents, len(enabled))
+	sem := make(chan struct{}, plannerFetchWorkers)
+	var wg sync.WaitGroup
+
+	for i, cal := range enabled {
+		wg.Add(1)
+		go func(i int, cal db.Calendar) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			out[i] = plannerCalendarEvents{Cal: cal}
+
+			cli, err := s.ClientFor(ctx, cal.AccountID)
+			if err != nil {
+				return
+			}
+			calCtx, cancel := context.WithTimeout(ctx, plannerCalendarTimeout)
+			defer cancel()
+
+			resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
+				Context(calCtx).SingleEvents(true).
+				TimeMin(rangeStart.Format(time.RFC3339)).
+				TimeMax(rangeEnd.Format(time.RFC3339)).
+				MaxResults(500).OrderBy("startTime").Do()
+			if err != nil {
+				return
+			}
+			out[i].Events = resp.Items
+		}(i, cal)
+	}
+	wg.Wait()
+	return out
+}
+
 func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), plannerTimeout)
 	defer cancel()
@@ -123,68 +190,47 @@ func (s *Server) handlePlannerPage(w http.ResponseWriter, r *http.Request) {
 
 	calendars, _ := s.Calendars.ListAll(ctx)
 
-	// Pull events per calendar — skip disabled ones. Sequential; ~20 cals is fine.
-	var allEvents []*gcal.Event
-	calByEvent := map[*gcal.Event]db.Calendar{}
-	for _, cal := range calendars {
-		if !cal.Enabled {
-			continue
-		}
-		cli, err := s.ClientFor(ctx, cal.AccountID)
-		if err != nil {
-			continue
-		}
-		resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
-			Context(ctx).SingleEvents(true).
-			TimeMin(rangeStart.Format(time.RFC3339)).
-			TimeMax(rangeEnd.Format(time.RFC3339)).
-			MaxResults(500).OrderBy("startTime").Do()
-		if err != nil {
-			continue
-		}
-		for _, ev := range resp.Items {
-			allEvents = append(allEvents, ev)
-			calByEvent[ev] = cal
-		}
-	}
+	fetched := s.fetchPlannerEvents(ctx, calendars, rangeStart, rangeEnd)
 
 	// Build per-day buckets across the visible range.
 	days := buildDays(rangeStart, rangeEnd, loc)
 	totals := map[string]float64{}
-	for _, ev := range allEvents {
-		if ev.Status == "cancelled" {
-			continue
-		}
-		cal := calByEvent[ev]
-		ctx := category.Context{
-			OwnerDomains:        ownerDomains,
-			CalendarDefaultSlug: defaultCategorySlug(cal, catBySlug),
-		}
-		slug := category.Classify(ev, ctx)
-		cat := catBySlug[slug]
-		isAllDay := ev.Start != nil && ev.Start.DateTime == "" && ev.Start.Date != ""
-		if isAllDay {
-			placeAllDay(days, ev, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
-			continue
-		}
-		start, end, ok := timedBounds(ev, loc)
-		if !ok {
-			continue
-		}
-		// Skip events entirely outside the visible range.
-		if !end.After(rangeStart) || !start.Before(rangeEnd) {
-			continue
-		}
-		clipS, clipE := start, end
-		if clipS.Before(rangeStart) {
-			clipS = rangeStart
-		}
-		if clipE.After(rangeEnd) {
-			clipE = rangeEnd
-		}
-		totals[slug] += clipE.Sub(clipS).Hours()
+	for _, f := range fetched {
+		cal := f.Cal
+		for _, ev := range f.Events {
+			if ev.Status == "cancelled" {
+				continue
+			}
+			ctx := category.Context{
+				OwnerDomains:        ownerDomains,
+				CalendarDefaultSlug: defaultCategorySlug(cal, catBySlug),
+			}
+			slug := category.Classify(ev, ctx)
+			cat := catBySlug[slug]
+			isAllDay := ev.Start != nil && ev.Start.DateTime == "" && ev.Start.Date != ""
+			if isAllDay {
+				placeAllDay(days, ev, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
+				continue
+			}
+			start, end, ok := timedBounds(ev, loc)
+			if !ok {
+				continue
+			}
+			// Skip events entirely outside the visible range.
+			if !end.After(rangeStart) || !start.Before(rangeEnd) {
+				continue
+			}
+			clipS, clipE := start, end
+			if clipS.Before(rangeStart) {
+				clipS = rangeStart
+			}
+			if clipE.After(rangeEnd) {
+				clipE = rangeEnd
+			}
+			totals[slug] += clipE.Sub(clipS).Hours()
 
-		placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
+			placeTimed(days, start, end, ev.Summary, slug, cat.Name, cat.Color, cal.Color, cal.Summary, loc)
+		}
 	}
 
 	// Sort each day's timed events and assign overlap lanes.
