@@ -17,6 +17,7 @@ import (
 // slots in the target account's effective hours.
 type Scheduler struct {
 	tasks       *db.TaskRepo
+	chunks      *db.TaskChunkRepo
 	habits      *db.HabitRepo
 	occurrences *db.HabitOccurrenceRepo
 	accounts    *db.AccountRepo
@@ -28,11 +29,12 @@ type Scheduler struct {
 	log         *slog.Logger
 }
 
-func NewScheduler(tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
+func NewScheduler(tasks *db.TaskRepo, chunks *db.TaskChunkRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
 	accounts *db.AccountRepo, calendars *db.CalendarRepo, managed *db.ManagedWindowRepo,
 	settings *db.SettingRepo, audit *db.AuditRepo, clientFor ClientFor, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		tasks:       tasks,
+		chunks:      chunks,
 		habits:      habits,
 		occurrences: occurrences,
 		accounts:    accounts,
@@ -104,68 +106,209 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 		return err
 	}
 
-	// If the task already has a scheduled slot, exclude it from the busy set
-	// so the slot is rediscoverable as "free for this task" — otherwise we'd
-	// kick our own existing block out.
-	if t.ScheduledStartsAt != nil && t.ScheduledEndsAt != nil {
-		busy = excludeBusyExact(busy, *t.ScheduledStartsAt, *t.ScheduledEndsAt)
+	existing, err := s.taskChunks(ctx, t.ID)
+	if err != nil {
+		return err
+	}
+	// The task's own blocks must not count against it, or a scheduled task
+	// would never find room to stay where it is. busyEverywhere already
+	// subtracts every managed window including these; this is the backstop for
+	// a scheduler wired without the managed-window repo.
+	for _, c := range existing {
+		busy = excludeBusyExact(busy, c.StartsAt, c.EndsAt)
 	}
 
 	dur := time.Duration(t.DurationMinutes) * time.Minute
-	slot, ok := hours.FirstFitSlot(avail, busy, dur, from)
-	if !ok {
-		// No room. Leave pending if it was; if it was scheduled, drop the old
-		// event (the user can manually move/reschedule the task).
-		if t.ScheduledEventID != "" {
-			_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, t.ScheduledEventID)
-			_ = s.tasks.UpdateScheduled(ctx, t.ID, "", nil, nil, db.TaskPending)
-			_ = s.audit.Write(ctx, db.AuditWrite{Kind: "task", Action: "unscheduled",
-				TargetEventID: t.ScheduledEventID,
-				Message:       fmt.Sprintf("no fit found for task #%d", t.ID)})
-		}
-		return nil
+	plan := hours.ChunkedSlots(avail, busy, dur, s.minChunk(ctx), from, maxTaskChunks)
+	if !plan.Fits {
+		// Placement is all-or-nothing. Booking 6 of 8 hours and calling the
+		// task scheduled would be a lie the user only discovers on Friday;
+		// the note says how close it got so they can shorten it, free time
+		// up, or move the deadline.
+		return s.unschedule(ctx, cli, cal, t, existing, noFitNote(dur, plan.Placeable, t.DueAt, loc))
 	}
+	return s.applyChunks(ctx, cli, cal, t, existing, plan, wh.TimeZone)
+}
 
-	// If we already have an event and the slot is identical, no-op.
-	if t.ScheduledEventID != "" && t.ScheduledStartsAt != nil && t.ScheduledStartsAt.Equal(slot.Start) &&
-		t.ScheduledEndsAt != nil && t.ScheduledEndsAt.Equal(slot.End) {
-		return nil
-	}
+// maxTaskChunks caps how many pieces one task may be broken into. The minimum
+// chunk length already bounds this in practice; this is the backstop against a
+// pathological calendar producing thirty separate blocks.
+const maxTaskChunks = 8
 
-	ev := &gcal.Event{
-		Summary:      t.Title,
-		Description:  t.Notes,
-		Start:        &gcal.EventDateTime{DateTime: slot.Start.Format(time.RFC3339), TimeZone: wh.TimeZone},
-		End:          &gcal.EventDateTime{DateTime: slot.End.Format(time.RFC3339), TimeZone: wh.TimeZone},
-		Transparency: "opaque",
-		ExtendedProperties: &gcal.EventExtendedProperties{
-			Private: calendar.TaskProps(t.ID),
-		},
-	}
+// minChunk is the shortest piece a split task may be broken into.
+func (s *Scheduler) minChunk(ctx context.Context) time.Duration {
+	return time.Duration(db.TaskMinChunkMinutes(ctx, s.settings)) * time.Minute
+}
 
-	var saved *gcal.Event
-	action := "scheduled"
-	if t.ScheduledEventID != "" {
-		saved, err = cli.UpdateEvent(ctx, cal.GoogleCalendarID, t.ScheduledEventID, ev)
-		action = "rescheduled"
-	} else {
-		saved, err = cli.InsertEvent(ctx, cal.GoogleCalendarID, ev)
+// taskChunks reads a task's existing blocks. A nil repo means the caller did
+// not wire one, in which case a task is never split and behaviour matches what
+// it was before.
+func (s *Scheduler) taskChunks(ctx context.Context, taskID int64) ([]db.TaskChunk, error) {
+	if s.chunks == nil {
+		return nil, nil
 	}
+	out, err := s.chunks.ListByTask(ctx, taskID)
 	if err != nil {
-		return fmt.Errorf("place task: %w", err)
+		return nil, fmt.Errorf("reading task chunks: %w", err)
 	}
-	start := slot.Start
-	end := slot.End
-	if err := s.tasks.UpdateScheduled(ctx, t.ID, saved.Id, &start, &end, db.TaskScheduled); err != nil {
-		return err
+	return out, nil
+}
+
+// noFitNote explains, in the user's terms, why nothing could be placed. A task
+// stuck at pending is the quiet failure SKUL-1 was about; this is the sentence
+// that makes it loud.
+func noFitNote(want, placeable time.Duration, due *time.Time, loc *time.Location) string {
+	if placeable <= 0 {
+		if due != nil {
+			return fmt.Sprintf("No free time before %s.", due.In(loc).Format("Mon Jan 2, 3:04 PM"))
+		}
+		return "No free time in your working hours over the next two weeks."
+	}
+	return fmt.Sprintf("Only %s of the %s needed would fit. Free up time, shorten the task, or move the due date.",
+		roundedDuration(placeable), roundedDuration(want))
+}
+
+func roundedDuration(d time.Duration) string {
+	d = d.Round(time.Minute)
+	h := int(d / time.Hour)
+	m := int((d % time.Hour) / time.Minute)
+	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%dh%dm", h, m)
+	case h > 0:
+		return fmt.Sprintf("%dh", h)
+	default:
+		return fmt.Sprintf("%dm", m)
+	}
+}
+
+// unschedule drops every block a task holds and records why, so the user can
+// shorten it, free time up, or move the deadline.
+func (s *Scheduler) unschedule(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
+	t *db.Task, existing []db.TaskChunk, note string) error {
+	for _, c := range existing {
+		_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, c.GoogleEventID)
+		if s.chunks != nil {
+			_ = s.chunks.Delete(ctx, c.ID)
+		}
+		_ = s.audit.Write(ctx, db.AuditWrite{Kind: "task", Action: "unscheduled",
+			TargetEventID: c.GoogleEventID,
+			Message:       fmt.Sprintf("no fit found for task #%d", t.ID)})
+	}
+	if len(existing) == 0 && t.ScheduledEventID == "" && t.ScheduleNote == note {
+		// Nothing was placed, nothing changed, and the reason still reads the
+		// same. Don't churn the row.
+		return nil
+	}
+	return s.tasks.UpdateScheduled(ctx, t.ID, "", nil, nil, db.TaskPending, note)
+}
+
+// applyChunks reconciles a task's blocks against the plan: existing events are
+// moved where the counts line up, extras are deleted, shortfalls are inserted.
+// Reusing events by position keeps the churn on the user's calendar down to
+// the blocks that actually moved.
+func (s *Scheduler) applyChunks(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
+	t *db.Task, existing []db.TaskChunk, plan hours.ChunkPlan, tz string) error {
+	unchanged := len(existing) == len(plan.Slots) && len(existing) > 0
+	if unchanged {
+		for i, c := range existing {
+			if !c.StartsAt.Equal(plan.Slots[i].Start) || !c.EndsAt.Equal(plan.Slots[i].End) {
+				unchanged = false
+				break
+			}
+		}
+	}
+	if unchanged && t.ScheduleNote == "" && t.Status == db.TaskScheduled {
+		return nil
+	}
+
+	total := len(plan.Slots)
+	firstEventID := ""
+	for i, slot := range plan.Slots {
+		ev := &gcal.Event{
+			Summary:      chunkTitle(t.Title, i, total),
+			Description:  t.Notes,
+			Start:        &gcal.EventDateTime{DateTime: slot.Start.Format(time.RFC3339), TimeZone: tz},
+			End:          &gcal.EventDateTime{DateTime: slot.End.Format(time.RFC3339), TimeZone: tz},
+			Transparency: "opaque",
+			ExtendedProperties: &gcal.EventExtendedProperties{
+				Private: calendar.TaskProps(t.ID),
+			},
+		}
+
+		if i < len(existing) {
+			c := existing[i]
+			saved, err := cli.UpdateEvent(ctx, cal.GoogleCalendarID, c.GoogleEventID, ev)
+			if err != nil {
+				return fmt.Errorf("move task block: %w", err)
+			}
+			if s.chunks != nil {
+				if err := s.chunks.UpdateWindow(ctx, c.ID, slot.Start, slot.End); err != nil {
+					return err
+				}
+			}
+			if i == 0 {
+				firstEventID = saved.Id
+			}
+			s.auditChunk(ctx, t.ID, saved.Id, "rescheduled", i, total, slot)
+			continue
+		}
+
+		saved, err := cli.InsertEvent(ctx, cal.GoogleCalendarID, ev)
+		if err != nil {
+			return fmt.Errorf("place task block: %w", err)
+		}
+		if s.chunks != nil {
+			if _, err := s.chunks.Insert(ctx, &db.TaskChunk{
+				TaskID: t.ID, Seq: i, GoogleEventID: saved.Id,
+				StartsAt: slot.Start, EndsAt: slot.End,
+			}); err != nil {
+				return err
+			}
+		}
+		if i == 0 {
+			firstEventID = saved.Id
+		}
+		s.auditChunk(ctx, t.ID, saved.Id, "scheduled", i, total, slot)
+	}
+
+	// The plan needs fewer blocks than the task currently holds.
+	if len(existing) > len(plan.Slots) {
+		for _, c := range existing[len(plan.Slots):] {
+			_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, c.GoogleEventID)
+			if s.chunks != nil {
+				_ = s.chunks.Delete(ctx, c.ID)
+			}
+			_ = s.audit.Write(ctx, db.AuditWrite{Kind: "task", Action: "unscheduled",
+				TargetEventID: c.GoogleEventID,
+				Message:       fmt.Sprintf("task #%d no longer needs this block", t.ID)})
+		}
+	}
+
+	start := plan.Slots[0].Start
+	end := plan.Slots[0].End
+	return s.tasks.UpdateScheduled(ctx, t.ID, firstEventID, &start, &end, db.TaskScheduled, "")
+}
+
+// chunkTitle labels a split task's blocks so "1/3" on the calendar reads as
+// deliberate rather than as three duplicates. A single-block task keeps its
+// plain title, so an ordinary task looks exactly as it always did.
+func chunkTitle(title string, i, total int) string {
+	if total <= 1 {
+		return title
+	}
+	return fmt.Sprintf("%s (%d/%d)", title, i+1, total)
+}
+
+func (s *Scheduler) auditChunk(ctx context.Context, taskID int64, eventID, action string, i, total int, slot hours.Window) {
+	where := slot.Start.Format(time.RFC3339) + "–" + slot.End.Format(time.RFC3339)
+	msg := fmt.Sprintf("task #%d scheduled %s", taskID, where)
+	if total > 1 {
+		msg = fmt.Sprintf("task #%d block %d/%d scheduled %s", taskID, i+1, total, where)
 	}
 	_ = s.audit.Write(ctx, db.AuditWrite{
-		Kind:          "task",
-		TargetEventID: saved.Id,
-		Action:        action,
-		Message:       fmt.Sprintf("task #%d scheduled %s–%s", t.ID, slot.Start.Format(time.RFC3339), slot.End.Format(time.RFC3339)),
+		Kind: "task", TargetEventID: eventID, Action: action, Message: msg,
 	})
-	return nil
 }
 
 // PlaceAllPending walks every active task and (re)places it. Used at startup,
