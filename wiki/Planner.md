@@ -10,9 +10,13 @@ strip across the top.
 - **Day headers**: weekday + date. Today is highlighted.
 - **All-day strip**: the thin row above the timeline; multi-day
   events span the days they cover.
-- **Timeline**: 6am-10pm visible (anything outside that window isn't
-  rendered yet — bump the constants in `handlers_planner.go` if you
-  routinely have 5am or 11pm events).
+- **Timeline**: 6am-10pm by default. Anything outside the visible
+  window isn't rendered, so widen it from the prefs form (**Day
+  starts** / **Day ends**, below the view selector) if you routinely
+  have 5am or 11pm events. Both are whole hours in 24-hour time; end
+  must be after start, and 0-24 gives you the full day. Clear both
+  fields to go back to 6-22. Narrowing the window makes each block
+  taller, which is worth doing if your day genuinely runs 9-5.
 - **Events**: positioned absolutely within their day column. Concurrent
   events are laid out in side-by-side lanes rather than stacked, so an
   overlapping block is legible rather than hidden behind its neighbour.

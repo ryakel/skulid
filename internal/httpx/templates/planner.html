@@ -36,6 +36,12 @@
       {{end}}
     </select>
   </label>
+  <label>Day starts
+    <input type="number" name="day_start" min="0" max="23" step="1" value="{{.DayStartHour}}">
+  </label>
+  <label>Day ends
+    <input type="number" name="day_end" min="1" max="24" step="1" value="{{.DayEndHour}}">
+  </label>
   <button type="submit" class="secondary">Save</button>
 </form>
 
@@ -58,7 +64,7 @@
 {{end}}
 
 {{define "planner_timeline"}}
-<div class="planner-grid" style="--cols: {{.DayCount}}">
+<div class="planner-grid" style="--cols: {{.DayCount}}; --hour-rows: {{.HourRowCount}}; --hours: {{.SpanHours}}">
   <div class="planner-corner"></div>
   {{range .Days}}
     <div class="planner-day-header {{if .IsToday}}is-today{{end}}">
