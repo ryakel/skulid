@@ -49,6 +49,7 @@ permissions:
   contents: write
   actions: write
   packages: write
+  security-events: write
 
 env:
   REGISTRY: ghcr.io
@@ -56,6 +57,26 @@ env:
   GO_VERSION: "1.25"
 
 jobs:
+  security:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # govulncheck reports only vulnerabilities actually reachable from this
+      # code, so it is low-noise enough to fail on rather than merely report.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          govulncheck ./...
+
   docker:
     runs-on: ubuntu-latest
     env:
@@ -197,8 +218,48 @@ jobs:
         with:
           context: .
           push: false
+          # Loaded into the local daemon so Trivy has something to scan.
+          # Single-platform because `load` cannot take a manifest list.
+          load: true
+          tags: skulid:pr-scan
           platforms: linux/amd64
           cache-from: type=gha
+
+      # Image scanning is report-only. The Go dependency story is already
+      # gated by govulncheck above; what this adds is the distroless base,
+      # where a CVE often has no fix available yet — and refusing to deploy
+      # over an unfixable base CVE is its own kind of outage.
+      - name: Scan image (PR)
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: skulid:pr-scan
+          format: sarif
+          output: trivy.sarif
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      - name: Scan image (published)
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.app_version }}
+          format: sarif
+          output: trivy.sarif
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      # continue-on-error so a repo without code scanning enabled cannot
+      # redden a build over a reporting side-channel.
+      - name: Upload image scan results
+        if: always() && hashFiles('trivy.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image
 
       - name: Connect to Tailscale
         if: |

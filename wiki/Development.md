@@ -76,6 +76,38 @@ helpers, crypto, sessions, calendar managed-event helpers, httpx
 helpers, renderer smoke test). Integration tests against Postgres and
 Google are deferred — see [#integration-tests-are-deferred](#integration-tests-are-deferred).
 
+## Security scanning
+
+CI runs two scans, deliberately in different places:
+
+| Scan | Where | Posture |
+| --- | --- | --- |
+| `govulncheck ./...` | its own `security` job | **fails the job** |
+| Trivy on the container image | the `docker` job, after build | report-only, SARIF to the Security tab |
+
+`govulncheck` reports only vulnerabilities *reachable* from this code, so it
+is quiet enough to gate on. It lives in a separate job on purpose: a
+vulnerable dependency should redden the PR loudly without also stranding the
+image build and the Portainer redeploy.
+
+The image scan is report-only because it mostly surfaces the distroless base,
+where a CRITICAL/HIGH often has no fix available yet — and refusing to deploy
+over an unfixable base CVE is its own kind of outage. It runs with
+`ignore-unfixed`, so what it does report is actionable.
+
+To run the Go scan locally:
+
+```bash
+go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+govulncheck ./...
+```
+
+It needs network access to `vuln.go.dev` for the vulnerability database.
+
+Dependency bumps arrive as PRs from Dependabot (`.github/dependabot.yml`),
+weekly and grouped, covering Go modules, both Dockerfile stages, and the
+pinned GitHub Actions.
+
 ## Project layout
 
 ```
