@@ -14,11 +14,40 @@ import (
 )
 
 const (
-	stateCookie   = "skulid_oauth_state"
-	intentCookie  = "skulid_oauth_intent"
-	IntentLogin   = "login"   // owner login (TOFU)
-	IntentConnect = "connect" // additional account connection
+	stateCookie     = "skulid_oauth_state"
+	intentCookie    = "skulid_oauth_intent"
+	expectSubCookie = "skulid_oauth_expect_sub"
+	IntentLogin     = "login"   // owner login (TOFU)
+	IntentConnect   = "connect" // additional account connection
 )
+
+// FlowOptions describes a consent round-trip about to start.
+type FlowOptions struct {
+	Intent string
+	// LoginHint pre-selects an account on Google's chooser. It is only a
+	// hint -- the user can still pick a different one, which is why
+	// ExpectSub exists.
+	LoginHint string
+	// ExpectSub, when set, is the Google subject ID the returning account
+	// must match. Set it for a reconnect, where the point is to repair one
+	// specific account; leave it empty when adding any new account.
+	ExpectSub string
+}
+
+// FlowState is what a completed consent round-trip carries back.
+type FlowState struct {
+	Intent    string
+	ExpectSub string
+}
+
+// SubMismatch reports whether a returning account is the wrong one.
+//
+// An empty expect means the flow placed no constraint -- "+ Connect Google
+// account" must still be able to add any account -- so only a set-and-
+// different subject is a mismatch.
+func SubMismatch(expect, got string) bool {
+	return expect != "" && expect != got
+}
 
 type OAuthProvider struct {
 	cfg *oauth2.Config
@@ -43,10 +72,9 @@ func NewOAuthProvider(clientID, clientSecret, redirectURL string) *OAuthProvider
 
 func (p *OAuthProvider) Config() *oauth2.Config { return p.cfg }
 
-// StartFlow begins a consent round-trip. loginHint, when non-empty, is passed
-// to Google as login_hint so a reconnect lands on the account that actually
-// broke instead of whichever one the browser happens to be signed into.
-func (p *OAuthProvider) StartFlow(w http.ResponseWriter, intent string, secure bool, loginHint string) string {
+// StartFlow begins a consent round-trip, recording what the callback will
+// need to validate it.
+func (p *OAuthProvider) StartFlow(w http.ResponseWriter, secure bool, opt FlowOptions) string {
 	state := randomState()
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookie,
@@ -59,43 +87,60 @@ func (p *OAuthProvider) StartFlow(w http.ResponseWriter, intent string, secure b
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     intentCookie,
-		Value:    intent,
+		Value:    opt.Intent,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   600,
 	})
+	// Only set for a reconnect. Cleared with the others in VerifyState, and
+	// scoped exactly like them so it cannot outlive the flow.
+	http.SetCookie(w, &http.Cookie{
+		Name:     expectSubCookie,
+		Value:    opt.ExpectSub,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600,
+	})
+
 	// Always request refresh tokens, force consent so we get one even on re-auth.
 	opts := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("prompt", "consent"),
 	}
-	if loginHint != "" {
-		opts = append(opts, oauth2.SetAuthURLParam("login_hint", loginHint))
+	if opt.LoginHint != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("login_hint", opt.LoginHint))
 	}
 	return p.cfg.AuthCodeURL(state, opts...)
 }
 
-// VerifyState reads the OAuth state cookie and intent. It clears both cookies.
-func (p *OAuthProvider) VerifyState(w http.ResponseWriter, r *http.Request) (string, error) {
+// VerifyState validates the OAuth state cookie and returns what the flow
+// recorded when it started. It clears every flow cookie.
+func (p *OAuthProvider) VerifyState(w http.ResponseWriter, r *http.Request) (FlowState, error) {
 	stateCk, err := r.Cookie(stateCookie)
 	if err != nil {
-		return "", fmt.Errorf("state cookie missing: %w", err)
+		return FlowState{}, fmt.Errorf("state cookie missing: %w", err)
 	}
-	intentCk, _ := r.Cookie(intentCookie)
 	got := r.URL.Query().Get("state")
 	if got == "" || got != stateCk.Value {
-		return "", fmt.Errorf("state mismatch")
+		return FlowState{}, fmt.Errorf("state mismatch")
 	}
-	intent := IntentLogin
-	if intentCk != nil && intentCk.Value != "" {
-		intent = intentCk.Value
+
+	out := FlowState{Intent: IntentLogin}
+	if ck, _ := r.Cookie(intentCookie); ck != nil && ck.Value != "" {
+		out.Intent = ck.Value
 	}
-	// Clear cookies.
-	http.SetCookie(w, &http.Cookie{Name: stateCookie, Value: "", Path: "/", MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: intentCookie, Value: "", Path: "/", MaxAge: -1})
-	return intent, nil
+	if ck, _ := r.Cookie(expectSubCookie); ck != nil {
+		out.ExpectSub = ck.Value
+	}
+
+	for _, name := range []string{stateCookie, intentCookie, expectSubCookie} {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1})
+	}
+	return out, nil
 }
 
 func (p *OAuthProvider) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {

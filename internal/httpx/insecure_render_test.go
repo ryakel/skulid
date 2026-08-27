@@ -91,3 +91,25 @@ func TestRenderNoInsecureBannerWhenConfigIsSound(t *testing.T) {
 		})
 	}
 }
+
+// A reconnect that signs in as the wrong Google account redirects with a
+// code; if the page doesn't translate it, the refusal is invisible and the
+// owner just sees nothing happen.
+func TestAccountsPageError(t *testing.T) {
+	msg := accountsPageError("wrong_account")
+	if msg == "" {
+		t.Fatal("wrong_account must produce a message")
+	}
+	for _, want := range []string{"different Google account", "nothing was changed"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message missing %q: %s", want, msg)
+		}
+	}
+
+	// Unknown codes render nothing rather than leaking a slug into the UI.
+	for _, code := range []string{"", "bogus", "wrong_account_x"} {
+		if got := accountsPageError(code); got != "" {
+			t.Errorf("accountsPageError(%q) = %q, want empty", code, got)
+		}
+	}
+}
