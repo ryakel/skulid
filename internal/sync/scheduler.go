@@ -97,7 +97,7 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	}
 
 	avail := hours.Expand(wh, from, to, loc)
-	busy, err := s.busyOn(ctx, cli, cal, from, to, wh.TimeZone)
+	busy, err := s.busyEverywhere(ctx, from, to, wh.TimeZone)
 	if err != nil {
 		return err
 	}
@@ -131,10 +131,10 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	}
 
 	ev := &gcal.Event{
-		Summary: t.Title,
-		Description: t.Notes,
-		Start: &gcal.EventDateTime{DateTime: slot.Start.Format(time.RFC3339), TimeZone: wh.TimeZone},
-		End:   &gcal.EventDateTime{DateTime: slot.End.Format(time.RFC3339), TimeZone: wh.TimeZone},
+		Summary:      t.Title,
+		Description:  t.Notes,
+		Start:        &gcal.EventDateTime{DateTime: slot.Start.Format(time.RFC3339), TimeZone: wh.TimeZone},
+		End:          &gcal.EventDateTime{DateTime: slot.End.Format(time.RFC3339), TimeZone: wh.TimeZone},
 		Transparency: "opaque",
 		ExtendedProperties: &gcal.EventExtendedProperties{
 			Private: calendar.TaskProps(t.ID),
@@ -181,31 +181,58 @@ func (s *Scheduler) PlaceAllPending(ctx context.Context) {
 	}
 }
 
-// busyOn pulls freebusy for one calendar and converts to hours.Window. The
-// result is post-padded by the calendar's effective buffer settings (per-
-// calendar override → global setting), rolled up into one universal padding
-// since freebusy output doesn't distinguish task-break from decompression.
-func (s *Scheduler) busyOn(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
-	from, to time.Time, tz string) ([]hours.Window, error) {
-	fb, err := cli.FreeBusy(ctx, []string{cal.GoogleCalendarID}, from, to, tz)
+// busyEverywhere pulls freebusy for every enabled calendar on every connected
+// account and merges the result.
+//
+// Scheduling used to consider only the calendar being written to, which meant
+// a personal task would happily land on top of a work meeting: different
+// calendar, so as far as the scheduler was concerned the slot was free. It is
+// one person's time regardless of which account owns the calendar, so all of
+// it counts.
+//
+// Each calendar's own buffer settings are applied to its own busy windows --
+// freebusy is keyed by calendar id, so the per-calendar override chain is
+// still honoured rather than flattened to the target's padding.
+//
+// This fails closed. If any account's freebusy cannot be fetched -- a revoked
+// token, an API error -- placement returns an error rather than proceeding on
+// a busy set it knows to be incomplete. Scheduling over a real meeting because
+// a token expired is a worse outcome than not scheduling at all, and SKUL-1's
+// banner already makes a locked-out account visible.
+func (s *Scheduler) busyEverywhere(ctx context.Context, from, to time.Time, tz string) ([]hours.Window, error) {
+	all, err := s.calendars.ListAll(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("freebusy: %w", err)
+		return nil, fmt.Errorf("listing calendars: %w", err)
 	}
+
 	var out []hours.Window
-	for _, periods := range fb {
-		for _, p := range periods {
-			ps, err := time.Parse(time.RFC3339, p.Start)
-			if err != nil {
-				continue
+	for accountID, cals := range groupByAccount(enabledCalendars(all)) {
+		cli, err := s.clientFor(ctx, accountID)
+		if err != nil {
+			return nil, fmt.Errorf("account %d unavailable, refusing to schedule against an incomplete busy set: %w", accountID, err)
+		}
+
+		ids := make([]string, 0, len(cals))
+		byGoogleID := make(map[string]db.Calendar, len(cals))
+		for _, c := range cals {
+			ids = append(ids, c.GoogleCalendarID)
+			byGoogleID[c.GoogleCalendarID] = c
+		}
+
+		fb, err := cli.FreeBusy(ctx, ids, from, to, tz)
+		if err != nil {
+			return nil, fmt.Errorf("freebusy for account %d: %w", accountID, err)
+		}
+
+		for googleID, periods := range fb {
+			windows := periodsToWindows(periods)
+			if cal, ok := byGoogleID[googleID]; ok {
+				windows = s.applyBufferPadding(ctx, &cal, windows)
 			}
-			pe, err := time.Parse(time.RFC3339, p.End)
-			if err != nil {
-				continue
-			}
-			out = append(out, hours.Window{Start: ps, End: pe})
+			out = append(out, windows...)
 		}
 	}
-	out = s.applyBufferPadding(ctx, cal, out)
+
 	return hours.Merge(out), nil
 }
 
@@ -324,7 +351,7 @@ func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
 		dayStart := day
 		dayEnd := day.AddDate(0, 0, 1)
 		avail := hours.Expand(wh, dayStart, dayEnd, loc)
-		busy, err := s.busyOn(ctx, cli, cal, dayStart, dayEnd, wh.TimeZone)
+		busy, err := s.busyEverywhere(ctx, dayStart, dayEnd, wh.TimeZone)
 		if err != nil {
 			s.log.Warn("habit busy fetch failed", "habit_id", h.ID, "day", key, "err", err)
 			continue

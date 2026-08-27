@@ -22,7 +22,10 @@ When you save a task, the scheduler asynchronously:
 
 1. Loads the target account's **effective Working hours**.
 2. Expands those hours over `[now, due_at or now+14d)`.
-3. Pulls the target calendar's freebusy.
+3. Pulls freebusy for **every enabled calendar on every connected
+   account** — not just the target. It is one person's time regardless of
+   which account owns the calendar, so a personal task will not be placed
+   on top of a work meeting.
 4. Applies any configured [buffer padding](Buffers).
 5. Calls `hours.FirstFitSlot` to find the earliest free window of the
    right duration.
@@ -49,8 +52,17 @@ Every placement / reschedule / drop lands in the audit log with
 
 - **Single-block placement.** Tasks aren't split into chunks — if
   duration > the largest free window, the task stays pending.
-- **Target calendar's freebusy only.** Tasks don't cross-check
-  conflicts on other calendars connected to the same account.
+- **Placement fails closed.** If any connected account's freebusy can't
+  be fetched — a revoked token, an API error — the task isn't placed at
+  all rather than placed against a busy set known to be incomplete.
+  Scheduling over a real meeting because a token expired is worse than
+  not scheduling. A locked-out account shows a banner on every page, so
+  the cause is visible; reconnect it and placement resumes on the next
+  tick.
+- **skulid's own blocks count as busy.** Freebusy doesn't say which
+  events skulid wrote, so a smart block filling your working hours will
+  also block task placement. If tasks stop finding room, that's the
+  usual reason.
 - **No drag-and-drop yet.** Move a task by editing its target
   calendar/due, or use the AI assistant.
 
