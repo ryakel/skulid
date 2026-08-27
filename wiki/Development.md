@@ -31,6 +31,18 @@ SKULID_DEV_AUTH_BYPASS=1
 SKULID_DEV_USER_EMAIL=dev@local   # optional, defaults to dev@local
 ```
 
+If you are also using placeholder secrets or a plain-http `EXTERNAL_URL` —
+typical for pure UI work — you need the second opt-in as well, because the
+daemon otherwise refuses to start on them:
+
+```ini
+SKULID_ALLOW_INSECURE_CONFIG=1
+```
+
+They are deliberately separate flags: one bypasses authentication, the other
+accepts unsafe secrets. Wanting one does not imply wanting the other. See
+[Configuration → Refusing to start on unsafe values](Configuration#refusing-to-start-on-unsafe-values).
+
 This registers `GET /dev/login`. Hitting that route claims TOFU as the
 synthetic `dev@local` (or whichever email you set) and issues a real
 session cookie. From then on every owner-protected page works exactly

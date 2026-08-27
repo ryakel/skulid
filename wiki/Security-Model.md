@@ -99,6 +99,25 @@ If you don't trust the AI assistant feature, just don't set
 `ANTHROPIC_API_KEY` — the routes are unregistered and the nav link
 hidden when it's absent.
 
+## Startup refuses unsafe configuration
+
+`docker-compose.yml` supplies a placeholder default for `SESSION_SECRET`,
+`ENCRYPTION_KEY`, both Google client credentials and `EXTERNAL_URL`. Without a
+content check, a `.env` that fails to load produces a **silently insecure
+instance**: refresh tokens sealed with an all-zero key published in this repo,
+session cookies signed with a known secret (so an owner session is forgeable
+regardless of TOFU), and `EXTERNAL_URL` falling back to plain http, which drops
+the `Secure` flag off that cookie.
+
+The daemon therefore refuses to start on any of those values — see
+[Configuration → Refusing to start on unsafe values](Configuration#refusing-to-start-on-unsafe-values).
+`SKULID_ALLOW_INSECURE_CONFIG=1` overrides it for local testing, at the cost of
+a red banner on every page.
+
+This matters more here than for most self-hosted tools: `EXTERNAL_URL` has to
+be publicly reachable for Google to deliver push notifications, so the host is
+internet-facing by design.
+
 ## Accounts you don't own
 
 Connecting an employer's Workspace account puts their data in scope. Two

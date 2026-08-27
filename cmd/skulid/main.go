@@ -124,6 +124,13 @@ func run(log *slog.Logger) error {
 		log.Info("ai assistant disabled (set ANTHROPIC_API_KEY to enable)")
 	}
 
+	// Load() only returns with findings when the operator explicitly opted
+	// in, so this is always a deliberate choice -- but it is one that must
+	// stay visible for as long as it lasts.
+	for _, f := range cfg.InsecureFindings {
+		log.Warn("INSECURE CONFIGURATION — not safe to expose to the internet", "var", f.Var, "reason", f.Reason)
+	}
+
 	if cfg.DevAuthBypass {
 		log.Warn("DEV AUTH BYPASS ENABLED — /dev/login skips OAuth and grants owner session. NEVER run with this flag in production.",
 			"dev_user_email", cfg.DevUserEmail)
@@ -145,26 +152,26 @@ func run(log *slog.Logger) error {
 	hookHandler := webhook.NewHandler(tokens, mgr, log)
 
 	srv := &httpx.Server{
-		Cfg:            cfg,
-		Version:        appVersion,
-		Sealer:         sealer,
-		Sessions:       sessions,
-		OAuth:          oauth,
-		TOFU:           tofu,
-		Settings:       settings,
-		Accounts:       accounts,
-		Calendars:      calendars,
-		Tokens:         tokens,
-		Rules:          rules,
-		Blocks:         blocks,
-		Managed:        managed,
-		Links:          links,
-		Audit:          audit,
-		Categories:     categories,
-		Tasks:          tasks,
-		Habits:         habits,
-		Occurrences:    occurrences,
-		Scheduler:      scheduler,
+		Cfg:             cfg,
+		Version:         appVersion,
+		Sealer:          sealer,
+		Sessions:        sessions,
+		OAuth:           oauth,
+		TOFU:            tofu,
+		Settings:        settings,
+		Accounts:        accounts,
+		Calendars:       calendars,
+		Tokens:          tokens,
+		Rules:           rules,
+		Blocks:          blocks,
+		Managed:         managed,
+		Links:           links,
+		Audit:           audit,
+		Categories:      categories,
+		Tasks:           tasks,
+		Habits:          habits,
+		Occurrences:     occurrences,
+		Scheduler:       scheduler,
 		Engine:          engine,
 		ClientFor:       clientFor,
 		Worker:          mgr,

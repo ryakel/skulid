@@ -21,6 +21,12 @@
   <form method="post" action="/login/start">
     <button type="submit">Sign in with Google</button>
   </form>
+  {{if .InsecureFindings}}
+  <div class="insecure-banner" style="margin-top:1rem;text-align:left">
+    <strong>⚠ INSECURE CONFIGURATION.</strong>
+    <ul>{{range .InsecureFindings}}<li><code>{{.Var}}</code> {{.Reason}}</li>{{end}}</ul>
+  </div>
+  {{end}}
   {{if .DevAuthBypass}}
   <div class="dev-banner" style="margin-top:1rem;text-align:center">
     Dev auth bypass is on. <a href="/dev/login">Skip OAuth →</a>
