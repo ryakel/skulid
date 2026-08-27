@@ -93,7 +93,7 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
-	url := s.OAuth.StartFlow(w, auth.IntentLogin, s.secureCookies(), "")
+	url := s.OAuth.StartFlow(w, s.secureCookies(), auth.FlowOptions{Intent: auth.IntentLogin})
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
@@ -131,12 +131,20 @@ func (s *Server) handleAccountReconnect(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "account not found", http.StatusNotFound)
 		return
 	}
-	url := s.OAuth.StartFlow(w, auth.IntentConnect, s.secureCookies(), acct.Email)
+	// ExpectSub is what makes this a reconnect rather than a second connect:
+	// login_hint only suggests an account, so without it, picking a different
+	// one at the consent screen would create a new row instead of repairing
+	// this one.
+	url := s.OAuth.StartFlow(w, s.secureCookies(), auth.FlowOptions{
+		Intent:    auth.IntentConnect,
+		LoginHint: acct.Email,
+		ExpectSub: acct.GoogleSub,
+	})
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
 func (s *Server) handleAccountConnect(w http.ResponseWriter, r *http.Request) {
-	url := s.OAuth.StartFlow(w, auth.IntentConnect, s.secureCookies(), "")
+	url := s.OAuth.StartFlow(w, s.secureCookies(), auth.FlowOptions{Intent: auth.IntentConnect})
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
@@ -146,11 +154,12 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?error="+errParam, http.StatusFound)
 		return
 	}
-	intent, err := s.OAuth.VerifyState(w, r)
+	flow, err := s.OAuth.VerifyState(w, r)
 	if err != nil {
 		http.Redirect(w, r, "/login?error=state", http.StatusFound)
 		return
 	}
+	intent := flow.Intent
 
 	// For "connect" intent, the caller must already be the owner.
 	if intent == auth.IntentConnect {
@@ -178,6 +187,17 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?error=userinfo", http.StatusFound)
 		return
 	}
+	// A reconnect names the account it is repairing. If a different one came
+	// back, stop here: upserting would key on the new google_sub and add a
+	// second account row while the broken one stayed broken -- confusing at
+	// exactly the moment the owner is already dealing with a lockout.
+	if auth.SubMismatch(flow.ExpectSub, info.Sub) {
+		s.Log.Warn("reconnect returned a different Google account; refusing to create a second account",
+			"expected_sub", flow.ExpectSub, "got_email", info.Email)
+		http.Redirect(w, r, "/accounts?error=wrong_account", http.StatusFound)
+		return
+	}
+
 	if tok.RefreshToken == "" {
 		// Google only emits a refresh token when prompt=consent + offline.
 		// If we don't get one we can't run unattended.
@@ -254,7 +274,23 @@ func (s *Server) handleAccountsPage(w http.ResponseWriter, r *http.Request) {
 	data := s.pageData(r, "Accounts")
 	data["Accounts"] = accounts
 	data["CalendarsByAccount"] = byAcct
+	if msg := accountsPageError(r.URL.Query().Get("error")); msg != "" {
+		data["Error"] = msg
+	}
 	s.render(w, "accounts", data)
+}
+
+// accountsPageError turns an ?error= code into something worth reading.
+// Unknown codes render nothing rather than leaking a raw slug into the UI.
+func accountsPageError(code string) string {
+	switch code {
+	case "wrong_account":
+		return "That reconnect signed in as a different Google account, so nothing was changed. " +
+			"Reconnect again and pick the account shown on the row — or use " +
+			"\"+ Connect Google account\" if you meant to add a new one."
+	default:
+		return ""
+	}
 }
 
 func (s *Server) handleAccountRefresh(w http.ResponseWriter, r *http.Request) {

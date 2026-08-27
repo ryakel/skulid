@@ -134,6 +134,12 @@ row and complete the consent screen; rules, smart blocks and per-calendar
 settings all survive, because the account is matched on its Google subject
 ID and only the stored tokens are replaced.
 
+Reconnect is bound to the account it was started from. If you complete the
+consent screen as a *different* Google account, skulid refuses the result and
+says so, rather than quietly adding a second account row while the broken one
+stays broken. Use **+ Connect Google account** when you actually mean to add
+one.
+
 Google revokes a refresh token when:
 
 - **The OAuth app is still in Testing publishing status.** Tokens die
