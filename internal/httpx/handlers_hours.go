@@ -179,13 +179,13 @@ func (s *Server) handleBuffersSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Buffer values changed -> re-derive decompress events on every calendar.
-	go s.Worker.RecomputeAllDecompression(context.Background())
+	go s.Worker.RecomputeAllBuffers(context.Background())
 	http.Redirect(w, r, "/settings/buffers", http.StatusFound)
 }
 
 // handleBuffersRecompute is the manual "Recompute now" button; runs the
 // decompression engine for every connected calendar in the background.
 func (s *Server) handleBuffersRecompute(w http.ResponseWriter, r *http.Request) {
-	go s.Worker.RecomputeAllDecompression(context.Background())
+	go s.Worker.RecomputeAllBuffers(context.Background())
 	http.Redirect(w, r, "/settings/buffers", http.StatusFound)
 }
