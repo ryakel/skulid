@@ -134,6 +134,32 @@ To check the state directly:
 SELECT email, needs_reauth, reauth_reason, reauth_detected_at FROM account;
 ```
 
+### Sync is slow, or the logs mention 429 / rateLimitExceeded
+
+Google's Calendar API is quota-limited, and skulid's workload is bursty:
+backfill walks history in one pass, the Planner issues one `Events.list` per
+connected calendar per page load, and smart-block and decompression recompute
+fire on a 15-second debounce — all multiplied by connected account.
+
+Rate-limited calls are retried automatically with exponential backoff and
+jitter, honouring `Retry-After` when Google sends it, up to 4 attempts. So an
+occasional 429 is self-healing and needs no action; you'll see the request
+succeed a moment later.
+
+Two deliberate limits on that:
+
+- **A 5xx is only retried for idempotent requests** (GET, PUT, DELETE). A
+  failed `Events.insert` is never replayed, because a 502 doesn't tell you
+  whether the event was created — and a duplicate event on a real calendar is
+  worse than a sync that has to be retried later.
+- **Transport-level failures aren't retried at all.** A connection that dies
+  mid-write may still have delivered the request; that's not distinguishable
+  from this layer.
+
+If throttling is persistent rather than occasional, the cause is usually
+backfill over a very large calendar. Reduce **Backfill last N days** on the
+rule and run it in smaller passes.
+
 ### Events aren't syncing
 
 1. **Audit log** — is the rule actually firing? Look for matching
