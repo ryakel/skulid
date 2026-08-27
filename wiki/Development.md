@@ -192,12 +192,26 @@ locally, just open the `.md` files in any markdown reader.
 
 ## Releasing
 
-There's no formal release cadence. Tag a commit on `main`:
+Releasing is automatic. Merging to `main` runs
+`.github/workflows/build-and-publish.yml`, which:
 
-```bash
-git tag -a v0.1.0 -m "first usable release"
-git push --tags
-```
+1. Reads the conventional-commit messages in the merge and **bumps a semver
+   tag** accordingly (`feat:` → minor, `fix:`/`chore:` → patch).
+2. Builds a multi-arch image (`linux/amd64,linux/arm64`) and pushes
+   `:latest` and `:vX.Y.Z` to **GHCR**, plus an internal registry when
+   `INTERNAL_REGISTRY` is configured.
+3. Fires the Portainer redeploy webhook when `PORTAINER_WEBHOOK_URL` is set.
 
-The Docker image isn't published anywhere — the `Dockerfile` and
-`docker-compose.yml` build it locally on each machine.
+So **don't tag by hand** on `main` — the workflow does it, and a manual tag
+just fights the bump. Pushing a `vX.Y.Z` tag directly is a separate,
+supported path: it publishes that single immutable image and skips the
+version bump and the release entry.
+
+The image is published, not built on each machine. `docker-compose.yml`
+pulls `ghcr.io/ryakel/skulid` and contains no `build:` stanza at all — see
+[Operations → Upgrades](Operations#upgrades).
+
+Note the workflow's `paths-ignore`: changes confined to `**/*.md`,
+`wiki/**`, `LICENSE*`, `.gitignore` or `CLAUDE.md` run no CI and publish no
+image, on both `push` and `pull_request`. A docs-only PR therefore shows no
+checks at all — that's expected, not a stuck build.

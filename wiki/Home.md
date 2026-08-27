@@ -41,7 +41,9 @@ Postgres in Docker.
 
 ## Status
 
-Beta. Schema is at v7; breaking changes will get numbered migrations.
+Beta. Breaking schema changes get numbered migrations under
+`migrations/`; an instance reports its own version via `goose_db_version`
+(see [Operations → Upgrades](Operations#upgrades)).
 Token sealing keys are not rotated automatically — keep your
 `ENCRYPTION_KEY` somewhere safe.
 
