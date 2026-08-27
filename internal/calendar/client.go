@@ -47,7 +47,15 @@ type Client struct {
 }
 
 func New(ctx context.Context, ts oauth2.TokenSource) (*Client, error) {
-	svc, err := calendar.NewService(ctx, option.WithTokenSource(ts))
+	// WithHTTPClient rather than WithTokenSource: building the client here
+	// means the retrying transport wraps every request the service makes,
+	// including the four call sites that reach the raw service through
+	// Service() and would otherwise bypass any retry added to this wrapper's
+	// own methods.
+	httpClient := oauth2.NewClient(ctx, ts)
+	httpClient.Transport = newRetryTransport(httpClient.Transport)
+
+	svc, err := calendar.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +88,7 @@ func (c *Client) ListCalendars(ctx context.Context) ([]*calendar.CalendarListEnt
 // IncrementalSyncResult is what an incremental sync returns: the new sync
 // token plus the list of events that changed since the last token.
 type IncrementalSyncResult struct {
-	Events       []*calendar.Event
+	Events        []*calendar.Event
 	NextSyncToken string
 }
 
