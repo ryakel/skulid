@@ -44,3 +44,24 @@ func Migrate(ctx context.Context, dsn string) error {
 	}
 	return nil
 }
+
+// MigrateDownAll unwinds every applied migration. Nothing in the running
+// application calls this; it exists so the integration suite can prove each
+// Down actually undoes its Up, which is where a hand-written rename goes
+// wrong. Never wire it to a route.
+func MigrateDownAll(ctx context.Context, dsn string) error {
+	sqlDB, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("sql.Open: %w", err)
+	}
+	defer sqlDB.Close()
+
+	goose.SetBaseFS(migrations.FS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	if err := goose.DownToContext(ctx, sqlDB, ".", 0); err != nil {
+		return fmt.Errorf("goose down: %w", err)
+	}
+	return nil
+}
