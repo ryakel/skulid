@@ -113,7 +113,9 @@ func run(log *slog.Logger) error {
 
 	engine := syncengine.NewEngine(rules, accounts, calendars, links, audit, clientFor, log)
 	smartEngine := syncengine.NewSmartBlockEngine(blocks, managed, calendars, audit, clientFor, log)
-	scheduler := syncengine.NewScheduler(tasks, habits, occurrences, accounts, calendars, settings, audit, clientFor, log)
+	managedWindows := db.NewManagedWindowRepo(pool)
+	scheduler := syncengine.NewScheduler(tasks, habits, occurrences, accounts, calendars,
+		managedWindows, settings, audit, clientFor, log)
 	decompEngine := syncengine.NewDecompressionEngine(calendars, accounts, settings, decomp, audit, clientFor, log)
 
 	mgr := worker.NewManager(pool, accounts, calendars, tokens, rules, blocks, links, audit,

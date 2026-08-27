@@ -7,6 +7,7 @@ import (
 	gcal "google.golang.org/api/calendar/v3"
 
 	"github.com/ryakel/skulid/internal/db"
+	"github.com/ryakel/skulid/internal/hours"
 )
 
 func TestEnabledCalendars(t *testing.T) {
@@ -94,5 +95,55 @@ func TestPeriodsToWindowsSkipsUnparseable(t *testing.T) {
 func TestPeriodsToWindowsEmpty(t *testing.T) {
 	if got := periodsToWindows(nil); len(got) != 0 {
 		t.Errorf("nil periods should yield nothing, got %d", len(got))
+	}
+}
+
+func win(startHour, endHour int) hours.Window {
+	day := time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)
+	return hours.Window{
+		Start: day.Add(time.Duration(startHour) * time.Hour),
+		End:   day.Add(time.Duration(endHour) * time.Hour),
+	}
+}
+
+// The whole point: a smart block filling the working day must not stop tasks
+// being placed, while a real meeting still must.
+func TestSubtractManagedFreesSkulidsOwnBlocks(t *testing.T) {
+	busy := []hours.Window{win(9, 12), win(14, 15)}
+	managed := []hours.Window{win(9, 12)} // a Focus block skulid wrote
+
+	got := subtractManaged(busy, managed)
+	if len(got) != 1 {
+		t.Fatalf("want the real meeting left, got %d windows: %+v", len(got), got)
+	}
+	if !got[0].Start.Equal(win(14, 15).Start) || !got[0].End.Equal(win(14, 15).End) {
+		t.Errorf("surviving window = %+v, want the 14-15 meeting", got[0])
+	}
+}
+
+func TestSubtractManagedLeavesRealMeetingsAlone(t *testing.T) {
+	busy := []hours.Window{win(9, 10), win(13, 14)}
+
+	if got := subtractManaged(busy, nil); len(got) != 2 {
+		t.Errorf("no managed windows should change nothing, got %d", len(got))
+	}
+	// A managed window somewhere else must not touch the busy set either.
+	if got := subtractManaged(busy, []hours.Window{win(20, 21)}); len(got) != 2 {
+		t.Errorf("a non-overlapping managed window should change nothing, got %+v", got)
+	}
+}
+
+// Partial overlap trims rather than removes: the uncovered remainder of a
+// real busy period has to survive.
+func TestSubtractManagedTrimsPartialOverlap(t *testing.T) {
+	busy := []hours.Window{win(9, 12)}
+	managed := []hours.Window{win(9, 10)}
+
+	got := subtractManaged(busy, managed)
+	if len(got) != 1 {
+		t.Fatalf("want one trimmed window, got %+v", got)
+	}
+	if !got[0].Start.Equal(win(10, 12).Start) || !got[0].End.Equal(win(10, 12).End) {
+		t.Errorf("trimmed window = %+v, want 10-12", got[0])
 	}
 }

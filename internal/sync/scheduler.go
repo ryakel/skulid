@@ -21,6 +21,7 @@ type Scheduler struct {
 	occurrences *db.HabitOccurrenceRepo
 	accounts    *db.AccountRepo
 	calendars   *db.CalendarRepo
+	managed     *db.ManagedWindowRepo
 	audit       *db.AuditRepo
 	settings    *db.SettingRepo
 	clientFor   ClientFor
@@ -28,14 +29,15 @@ type Scheduler struct {
 }
 
 func NewScheduler(tasks *db.TaskRepo, habits *db.HabitRepo, occurrences *db.HabitOccurrenceRepo,
-	accounts *db.AccountRepo, calendars *db.CalendarRepo, settings *db.SettingRepo,
-	audit *db.AuditRepo, clientFor ClientFor, log *slog.Logger) *Scheduler {
+	accounts *db.AccountRepo, calendars *db.CalendarRepo, managed *db.ManagedWindowRepo,
+	settings *db.SettingRepo, audit *db.AuditRepo, clientFor ClientFor, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		tasks:       tasks,
 		habits:      habits,
 		occurrences: occurrences,
 		accounts:    accounts,
 		calendars:   calendars,
+		managed:     managed,
 		audit:       audit,
 		settings:    settings,
 		clientFor:   clientFor,
@@ -233,7 +235,36 @@ func (s *Scheduler) busyEverywhere(ctx context.Context, from, to time.Time, tz s
 		}
 	}
 
-	return hours.Merge(out), nil
+	busy := hours.Merge(out)
+
+	// Freebusy cannot tell skulid's own writes from real meetings, so without
+	// this a smart block filling your working hours would block every task
+	// from ever being placed -- and the only symptom would be tasks sitting
+	// at pending. Every window skulid wrote is already recorded locally, so
+	// removing them costs one query and no API calls.
+	managed, err := s.managedWindows(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return subtractManaged(busy, managed), nil
+}
+
+// managedWindows reads back what skulid itself has scheduled in the range.
+// A nil repo means the caller did not wire one, in which case nothing is
+// subtracted and behaviour matches what it was before.
+func (s *Scheduler) managedWindows(ctx context.Context, from, to time.Time) ([]hours.Window, error) {
+	if s.managed == nil {
+		return nil, nil
+	}
+	rows, err := s.managed.InRange(ctx, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("reading managed windows: %w", err)
+	}
+	out := make([]hours.Window, 0, len(rows))
+	for _, w := range rows {
+		out = append(out, hours.Window{Start: w.StartsAt, End: w.EndsAt})
+	}
+	return out, nil
 }
 
 // applyBufferPadding extends every busy window's end by the calendar's
