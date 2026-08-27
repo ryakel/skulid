@@ -77,7 +77,46 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           govulncheck ./...
 
+  # Postgres-backed tests. These exist because every repo is hand-written SQL
+  # with no compile-time checking, and because migrations 0011 and 0012 reached
+  # production having never been run against a real server. `docker` needs this
+  # job, so a migration that fails to apply can never publish an image.
+  integration:
+    name: Integration tests (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        # Without this the job races the container's first-boot initdb.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Each test creates and drops a database of its own off this DSN, so it
+      # points at the maintenance database rather than a fixture.
+      - name: Test
+        env:
+          SKULID_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+        run: go test -race -count=1 ./...
+
   docker:
+    needs: integration
     runs-on: ubuntu-latest
     env:
       INTERNAL_REGISTRY: ${{ secrets.INTERNAL_REGISTRY }}
