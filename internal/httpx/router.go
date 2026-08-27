@@ -109,6 +109,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/rules/{id}/delete", s.handleRuleDelete)
 		r.Post("/rules/{id}/sync", s.handleRuleSyncNow)
 		r.Post("/rules/{id}/backfill", s.handleRuleBackfill)
+		r.Post("/rules/{id}/backfill/rerun", s.handleRuleBackfillRerun)
 
 		r.Get("/blocks", s.handleBlocksPage)
 		r.Get("/blocks/new", s.handleBlockEditPage)

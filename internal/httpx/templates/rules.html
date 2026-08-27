@@ -16,8 +16,14 @@
       <td>{{if .Rule.Enabled}}yes{{else}}no{{end}}</td>
       <td class="actions">
         <form method="post" action="/rules/{{.Rule.ID}}/sync"><button type="submit">Sync now</button></form>
-        {{if and (gt .Rule.BackfillDays 0) (not .Rule.BackfillDone)}}
-          <form method="post" action="/rules/{{.Rule.ID}}/backfill"><button type="submit">Backfill {{.Rule.BackfillDays}}d</button></form>
+        {{if gt .Rule.BackfillDays 0}}
+          {{if .Rule.BackfillDone}}
+            <form method="post" action="/rules/{{.Rule.ID}}/backfill/rerun"
+                  onsubmit="return confirm('Walk the last {{.Rule.BackfillDays}} days again? Mirrors that no longer match this rule will be deleted.')">
+              <button type="submit" class="secondary">Re-run backfill</button></form>
+          {{else}}
+            <form method="post" action="/rules/{{.Rule.ID}}/backfill"><button type="submit">Backfill {{.Rule.BackfillDays}}d</button></form>
+          {{end}}
         {{end}}
         <form method="post" action="/rules/{{.Rule.ID}}/delete" onsubmit="return confirm('Delete rule?')"><button type="submit" class="danger">Delete</button></form>
       </td>

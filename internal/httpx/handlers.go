@@ -594,14 +594,45 @@ func (s *Server) handleRuleBackfill(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad id", http.StatusBadRequest)
 		return
 	}
-	go func(ruleID int64) {
+	s.startBackfill(id)
+	http.Redirect(w, r, "/rules", http.StatusFound)
+}
+
+// handleRuleBackfillRerun clears backfill_done and walks history again.
+//
+// The pass deliberately keeps the rule's existing event_link rows. applyRule
+// already handles a narrowed filter: a linked event that no longer matches has
+// its mirror deleted and its link dropped (audited as "filter_drop"). Clearing
+// the links first would instead orphan those mirrors on Google -- with no link
+// there is no target event id to delete, and every still-matching event would
+// be inserted a second time rather than updated in place.
+func (s *Server) handleRuleBackfillRerun(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	// Reset synchronously so the page that comes back already shows the rule
+	// as backfilling rather than done. If the run below fails, the flag stays
+	// false and the ordinary Backfill button reappears, which is recoverable.
+	if err := s.Rules.ResetBackfill(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.startBackfill(id)
+	http.Redirect(w, r, "/rules", http.StatusFound)
+}
+
+// startBackfill runs a rule's backfill in the background. It can walk months
+// of history against a rate-limited API, so it never blocks the request.
+func (s *Server) startBackfill(ruleID int64) {
+	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		if err := s.Engine.Backfill(ctx, ruleID); err != nil {
 			s.Log.Error("backfill failed", "rule_id", ruleID, "err", err)
 		}
-	}(id)
-	http.Redirect(w, r, "/rules", http.StatusFound)
+	}()
 }
 
 // ---------------------------------------------------------------------------

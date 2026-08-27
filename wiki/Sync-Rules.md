@@ -108,28 +108,32 @@ history:
 2. After save, click **Backfill Nd** on the rule row.
 
 Backfill walks the source calendar from `now - N days` and runs every
-event through the rule engine once. The rule's `backfill_done` flag is
-set when complete, hiding the button.
+event through the rule engine once, in the background — the page comes
+straight back while it runs. The rule's `backfill_done` flag is set when
+complete, which swaps the button for **Re-run backfill**.
 
 ### Re-running a backfill
 
 **Editing a rule does not reset `backfill_done`.** Neither does changing
 **Backfill last N days** and saving again — the update statement doesn't
-touch the column. Once a backfill has completed, the button is gone and
-there is currently no way to run it again from the UI.
+touch the column. Once a backfill has completed, **Backfill Nd** is
+replaced by **Re-run backfill**, which clears the flag and walks history
+again in one step. It asks for confirmation first, because:
 
-Until there is (tracked as SKUL-21), the only route is the database:
+- The second pass runs under the rule's *current* configuration, not the
+  one the first pass used. A filter you have since narrowed will **delete**
+  the mirrors that no longer match (audited as `filter_drop`).
+- It walks the full N days again against a rate-limited API. On a busy
+  calendar with a long window that is not a cheap button.
 
-```bash
-docker compose exec db psql -U skulid -d skulid \
-  -c "update sync_rule set backfill_done = false where id = <rule id>;"
-```
+Events that still match are updated in place rather than duplicated: the
+rule keeps its `event_link` rows across a re-run, so the engine knows
+which mirror belongs to which source event.
 
-The **Backfill Nd** button reappears on the rules page after that.
-
-Worth knowing before you do: a second pass walks the same history again
-under the rule's *current* configuration, so a filter you have since
-narrowed will delete mirrors that no longer match.
+One limit worth knowing: the pass only visits events inside the *new*
+window. If you shorten **Backfill last N days**, mirrors created by an
+earlier, longer run fall outside it and are left alone — narrow the
+filter instead if you want them cleaned up, or delete them by hand.
 
 ## Manual sync
 
