@@ -44,7 +44,9 @@ Each occurrence is stored in `habit_occurrence` with a unique
 - Saving a new or edited habit (future occurrences are wiped first
   so the scheduler rebuilds under the new rules).
 - The **Recompute** button on the habits list.
-- Daily worker tick (planned).
+- The maintenance tick, every 6 hours. It re-runs placement for every
+  enabled habit so the rolling horizon stays current as days fall off the
+  back of it.
 
 ## Common patterns
 
@@ -53,11 +55,13 @@ Each occurrence is stored in `habit_occurrence` with a unique
 - Title `Lunch`, duration 60m, ideal `12:00`, flex 90m, weekdays,
   hours window `personal`, horizon 14 days.
 
-### Decompress after meetings *(future)*
+### Decompress after meetings
 
-The current Buffers v1 implements decompression as scheduler-internal
-padding. A visible "Decompress" event after every non-managed meeting
-is on the roadmap.
+Shipped — you don't need a habit for this. The buffer engine writes a
+visible "Decompress" event after every non-managed meeting with two or more
+human attendees, keeps it in step when the meeting moves, and reaps it when
+the meeting is cancelled. Configure the length at **Settings → Buffers**;
+see [Buffers](Buffers).
 
 ### Standup buffer
 
