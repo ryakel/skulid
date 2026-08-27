@@ -270,3 +270,95 @@ func NearestFitSlot(avail, busy []Window, duration, flex time.Duration, ideal ti
 	}
 	return best, bestFound
 }
+
+// ChunkPlan describes how a task's duration should be spread across the
+// calendar. Slots are in chronological order and together account for exactly
+// the requested total.
+type ChunkPlan struct {
+	Slots []Window
+	// Placeable is how much of the requested total could be placed. It equals
+	// the total when Fits is true, and is the best that was available
+	// otherwise -- enough to tell the user "6 of your 8 hours would fit".
+	Placeable time.Duration
+	Fits      bool
+}
+
+// ChunkedSlots spreads `total` across the earliest free time in
+// (avail - busy) at or after `notBefore`, in at most `maxChunks` pieces of at
+// least `minChunk` each.
+//
+// It always prefers one contiguous block: if the whole total fits in a single
+// free window, that is what comes back, so an ordinary task keeps landing
+// where it always did and nothing churns.
+//
+// Free windows shorter than minChunk are skipped rather than filled, so an
+// eight-hour task doesn't shatter into a dozen twenty-minute fragments
+// wedged between meetings. The final piece is the one exception: whatever
+// remains is taken even if it falls under minChunk, since a 15-minute tail
+// beats leaving the whole task unplaced over it.
+//
+// When the free time runs out before the total does, the plan comes back with
+// Fits false and every slot it did find. The caller decides whether a partial
+// placement is useful; reporting how much would have fit is more useful than
+// a bare failure either way.
+func ChunkedSlots(avail, busy []Window, total, minChunk time.Duration, notBefore time.Time, maxChunks int) ChunkPlan {
+	if total <= 0 || maxChunks <= 0 {
+		return ChunkPlan{Fits: total <= 0}
+	}
+	if minChunk <= 0 {
+		minChunk = total
+	}
+	if minChunk > total {
+		minChunk = total
+	}
+
+	free := SubtractBusy(avail, busy)
+
+	// One contiguous block wins whenever it can.
+	for _, f := range free {
+		start := f.Start
+		if notBefore.After(start) {
+			start = notBefore
+		}
+		if end := start.Add(total); !end.After(f.End) {
+			return ChunkPlan{
+				Slots:     []Window{{Start: start, End: end}},
+				Placeable: total,
+				Fits:      true,
+			}
+		}
+	}
+
+	var slots []Window
+	remaining := total
+	for _, f := range free {
+		if remaining <= 0 || len(slots) >= maxChunks {
+			break
+		}
+		start := f.Start
+		if notBefore.After(start) {
+			start = notBefore
+		}
+		capacity := f.End.Sub(start)
+		if capacity <= 0 {
+			continue
+		}
+		take := remaining
+		if capacity < take {
+			take = capacity
+		}
+		// Skip a window too small to be worth breaking into, unless taking it
+		// finishes the task.
+		if take < minChunk && take < remaining {
+			continue
+		}
+		slots = append(slots, Window{Start: start, End: start.Add(take)})
+		remaining -= take
+	}
+
+	return ChunkPlan{
+		Slots:     slots,
+		Placeable: total - remaining,
+		Fits:      remaining <= 0,
+	}
+}

@@ -333,3 +333,161 @@ func TestNearestFitSlotRespectsFlex(t *testing.T) {
 		t.Fatal("expected no fit within ±30m of 14:00")
 	}
 }
+
+// chunkWin builds a window from two "15:04" times on a fixed UTC day.
+func chunkWin(t *testing.T, s, e string) Window {
+	t.Helper()
+	loc := mustLoad(t, "UTC")
+	return Window{Start: ts(t, "15:04", s, loc), End: ts(t, "15:04", e, loc)}
+}
+
+func chunkAt(t *testing.T, s string) time.Time {
+	t.Helper()
+	return ts(t, "15:04", s, mustLoad(t, "UTC"))
+}
+
+func TestChunkedSlotsPrefersOneContiguousBlock(t *testing.T) {
+	avail := []Window{chunkWin(t, "09:00", "17:00")}
+	got := ChunkedSlots(avail, nil, 3*time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 8)
+	if !got.Fits {
+		t.Fatalf("3h should fit in an 8h day")
+	}
+	want := []Window{chunkWin(t, "09:00", "12:00")}
+	if !reflect.DeepEqual(got.Slots, want) {
+		t.Fatalf("got %+v want %+v", got.Slots, want)
+	}
+}
+
+func TestChunkedSlotsSplitsAcrossGaps(t *testing.T) {
+	// A 4-hour task on a day with two 2-hour gaps: it must split rather than
+	// stay unplaced, which is the whole point of the change.
+	avail := []Window{chunkWin(t, "09:00", "17:00")}
+	busy := []Window{chunkWin(t, "11:00", "13:00"), chunkWin(t, "15:00", "17:00")}
+	got := ChunkedSlots(avail, busy, 4*time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 8)
+	if !got.Fits {
+		t.Fatalf("4h should fit across two 2h gaps, got %+v", got)
+	}
+	want := []Window{chunkWin(t, "09:00", "11:00"), chunkWin(t, "13:00", "15:00")}
+	if !reflect.DeepEqual(got.Slots, want) {
+		t.Fatalf("got %+v want %+v", got.Slots, want)
+	}
+}
+
+func TestChunkedSlotsSkipsWindowsBelowMinChunk(t *testing.T) {
+	// Three 15-minute slivers and one 2-hour block. A 2-hour task must land in
+	// the block alone rather than shattering across the slivers.
+	avail := []Window{chunkWin(t, "09:00", "17:00")}
+	busy := []Window{
+		chunkWin(t, "09:15", "10:00"),
+		chunkWin(t, "10:15", "11:00"),
+		chunkWin(t, "11:15", "12:00"),
+	}
+	got := ChunkedSlots(avail, busy, 2*time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 8)
+	if !got.Fits {
+		t.Fatalf("2h should fit in the 12:00-17:00 block, got %+v", got)
+	}
+	want := []Window{chunkWin(t, "12:00", "14:00")}
+	if !reflect.DeepEqual(got.Slots, want) {
+		t.Fatalf("got %+v want %+v", got.Slots, want)
+	}
+}
+
+func TestChunkedSlotsTakesShortTailToFinish(t *testing.T) {
+	// The final piece may fall under minChunk: a 15-minute tail beats leaving
+	// the whole task unplaced over it.
+	avail := []Window{chunkWin(t, "09:00", "10:00"), chunkWin(t, "11:00", "11:15")}
+	got := ChunkedSlots(avail, nil, 75*time.Minute, 30*time.Minute, chunkAt(t, "09:00"), 8)
+	if !got.Fits {
+		t.Fatalf("1h15m should fit across 1h + 15m, got %+v", got)
+	}
+	want := []Window{chunkWin(t, "09:00", "10:00"), chunkWin(t, "11:00", "11:15")}
+	if !reflect.DeepEqual(got.Slots, want) {
+		t.Fatalf("got %+v want %+v", got.Slots, want)
+	}
+}
+
+func TestChunkedSlotsOnlyTheLastPieceMayBeShort(t *testing.T) {
+	// A 2h15m task across a 2h window and a 1h window: the tail is 15m, under
+	// the 30m minimum. That is allowed, because the alternative is not placing
+	// the task — but it must be the *last* piece, and the total must be exact.
+	avail := []Window{chunkWin(t, "09:00", "11:00"), chunkWin(t, "13:00", "14:00")}
+	got := ChunkedSlots(avail, nil, 135*time.Minute, 30*time.Minute, chunkAt(t, "09:00"), 8)
+	if !got.Fits {
+		t.Fatalf("2h15m should fit across 2h + 1h, got %+v", got)
+	}
+	if len(got.Slots) != 2 {
+		t.Fatalf("want 2 slots, got %+v", got.Slots)
+	}
+	for i, s := range got.Slots[:len(got.Slots)-1] {
+		if d := s.End.Sub(s.Start); d < 30*time.Minute {
+			t.Errorf("slot %d is %v, below the 30m minimum; only the last may be short", i, d)
+		}
+	}
+	var total time.Duration
+	for _, s := range got.Slots {
+		total += s.End.Sub(s.Start)
+	}
+	if total != 135*time.Minute {
+		t.Errorf("slots total %v, want 2h15m", total)
+	}
+}
+
+func TestChunkedSlotsReportsPartialFit(t *testing.T) {
+	// Not enough room anywhere: report what would have fit rather than
+	// failing bare, so the task can say "6 of your 8 hours".
+	avail := []Window{chunkWin(t, "09:00", "11:00"), chunkWin(t, "13:00", "15:00")}
+	got := ChunkedSlots(avail, nil, 8*time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 8)
+	if got.Fits {
+		t.Fatalf("8h cannot fit in 4h of free time")
+	}
+	if got.Placeable != 4*time.Hour {
+		t.Errorf("Placeable = %v, want 4h", got.Placeable)
+	}
+}
+
+func TestChunkedSlotsRespectsMaxChunks(t *testing.T) {
+	avail := []Window{
+		chunkWin(t, "09:00", "10:00"),
+		chunkWin(t, "11:00", "12:00"),
+		chunkWin(t, "13:00", "14:00"),
+		chunkWin(t, "15:00", "16:00"),
+	}
+	got := ChunkedSlots(avail, nil, 4*time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 2)
+	if got.Fits {
+		t.Fatalf("4h across 4 one-hour windows cannot fit in 2 chunks")
+	}
+	if len(got.Slots) != 2 {
+		t.Fatalf("want at most 2 slots, got %d", len(got.Slots))
+	}
+	if got.Placeable != 2*time.Hour {
+		t.Errorf("Placeable = %v, want 2h", got.Placeable)
+	}
+}
+
+func TestChunkedSlotsHonoursNotBefore(t *testing.T) {
+	avail := []Window{chunkWin(t, "09:00", "17:00")}
+	got := ChunkedSlots(avail, nil, time.Hour, 30*time.Minute, chunkAt(t, "13:30"), 8)
+	if !got.Fits || len(got.Slots) != 1 {
+		t.Fatalf("got %+v", got)
+	}
+	if !got.Slots[0].Start.Equal(chunkAt(t, "13:30")) {
+		t.Errorf("start = %v, want 13:30", got.Slots[0].Start)
+	}
+}
+
+func TestChunkedSlotsEdgeCases(t *testing.T) {
+	avail := []Window{chunkWin(t, "09:00", "17:00")}
+	if got := ChunkedSlots(avail, nil, 0, 30*time.Minute, chunkAt(t, "09:00"), 8); !got.Fits || len(got.Slots) != 0 {
+		t.Errorf("zero duration should trivially fit with no slots, got %+v", got)
+	}
+	if got := ChunkedSlots(avail, nil, time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 0); got.Fits {
+		t.Errorf("zero maxChunks should not fit, got %+v", got)
+	}
+	if got := ChunkedSlots(nil, nil, time.Hour, 30*time.Minute, chunkAt(t, "09:00"), 8); got.Fits {
+		t.Errorf("no availability should not fit, got %+v", got)
+	}
+	// A minChunk larger than the task itself must not make the task unplaceable.
+	if got := ChunkedSlots(avail, nil, 20*time.Minute, time.Hour, chunkAt(t, "09:00"), 8); !got.Fits {
+		t.Errorf("a 20m task should fit even with a 1h minChunk, got %+v", got)
+	}
+}
