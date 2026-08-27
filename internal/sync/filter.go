@@ -10,13 +10,13 @@ import (
 )
 
 type Filter struct {
-	TitleRegex   string   `json:"title_regex,omitempty"`
-	ColorIDs     []string `json:"color_ids,omitempty"`
-	AttendeeAny  []string `json:"attendee_match,omitempty"`
-	FreeBusy     string   `json:"free_busy,omitempty"` // "busy" | "free" | ""
-	AllDay       string   `json:"all_day,omitempty"`   // "only" | "exclude" | ""
-	StartHour    int      `json:"start_hour,omitempty"`
-	EndHour      int      `json:"end_hour,omitempty"`
+	TitleRegex  string   `json:"title_regex,omitempty"`
+	ColorIDs    []string `json:"color_ids,omitempty"`
+	AttendeeAny []string `json:"attendee_match,omitempty"`
+	FreeBusy    string   `json:"free_busy,omitempty"` // "busy" | "free" | ""
+	AllDay      string   `json:"all_day,omitempty"`   // "only" | "exclude" | ""
+	StartHour   int      `json:"start_hour,omitempty"`
+	EndHour     int      `json:"end_hour,omitempty"`
 }
 
 func ParseFilter(raw json.RawMessage) (Filter, error) {

@@ -51,3 +51,23 @@ func periodsToWindows(periods []*gcal.TimePeriod) []hours.Window {
 	}
 	return out
 }
+
+// subtractManaged removes skulid's own scheduled windows from a busy set.
+//
+// Freebusy returns opaque periods with no extendedProperties, so a smart
+// block is indistinguishable from a real meeting at that layer. Every window
+// skulid wrote is recorded locally, though, so they can be removed here
+// instead -- at the cost of one database query rather than a per-calendar
+// Events.list.
+//
+// The known limit: Google merges adjacent and overlapping busy periods before
+// returning them. If a real meeting was created on top of a skulid block
+// after that block was placed, removing the block's window also removes the
+// overlap, and that slice stops reading as busy. Narrow, and strictly better
+// than the alternative of every managed block blocking all placement.
+func subtractManaged(busy, managed []hours.Window) []hours.Window {
+	if len(managed) == 0 {
+		return busy
+	}
+	return hours.SubtractBusy(busy, managed)
+}

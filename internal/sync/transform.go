@@ -29,10 +29,10 @@ func ParseTransform(raw json.RawMessage) (Transform, error) {
 // Visibility mode presets matching Reclaim's four levels. Picking one of
 // these expands into a fully-specified Transform via TransformForMode.
 const (
-	VisibilityPersonalCommitment   = "personal_commitment"
-	VisibilityBusyForAll           = "busy_for_all"
-	VisibilityDetailsForYouOthers  = "details_for_you_busy_others"
-	VisibilityDetailsForYouAccess  = "details_for_you_and_access"
+	VisibilityPersonalCommitment  = "personal_commitment"
+	VisibilityBusyForAll          = "busy_for_all"
+	VisibilityDetailsForYouOthers = "details_for_you_busy_others"
+	VisibilityDetailsForYouAccess = "details_for_you_and_access"
 )
 
 // TransformForMode returns a Transform derived from a visibility mode preset.

@@ -27,9 +27,9 @@ matching a `days_of_week` entry it pulls a per-day freebusy across
 target — applies each calendar's own buffer padding, and calls
 `hours.NearestFitSlot(duration, flex, ideal)`.
 
-Habits share the placement path with [Tasks](Tasks), so the same two
-caveats apply: placement fails closed when an account's freebusy can't
-be fetched, and skulid's own managed blocks count as busy.
+Habits share the placement path with [Tasks](Tasks), so the same caveats
+apply — most importantly that placement fails closed when an account's
+freebusy can't be fetched.
 
 - If a slot fits within `±flex` of `ideal`, an occurrence is created
   (or moved if it already existed for that date).
