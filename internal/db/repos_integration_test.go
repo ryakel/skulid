@@ -3,11 +3,8 @@ package db
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // The tests in this file exist for one reason: every repo is hand-written SQL
@@ -48,13 +45,9 @@ func TestAccountRepoRoundTrip(t *testing.T) {
 	if err != nil || bySub == nil || bySub.ID != id {
 		t.Fatalf("GetBySub: %v (got %v)", err, bySub)
 	}
-	// AccountRepo.Get is the one reader that returns pgx.ErrNoRows rather than
-	// the repo convention of (nil, nil) -- GetBySub right beside it does the
-	// convention. Pinned here rather than fixed, because auth/tokensource.go
-	// dereferences the result without a nil check and would panic instead of
-	// erroring. Tracked as SKUL-22.
-	if _, err := r.Get(ctx, id+9999); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("missing account: got err %v, want pgx.ErrNoRows", err)
+	// Both readers follow the repo convention: not found is not an error.
+	if missing, err := r.Get(ctx, id+9999); err != nil || missing != nil {
+		t.Errorf("missing account should be (nil, nil), got (%v, %v)", missing, err)
 	}
 	if missing, err := r.GetBySub(ctx, "no-such-sub"); err != nil || missing != nil {
 		t.Errorf("missing sub should be (nil, nil), got (%v, %v)", missing, err)

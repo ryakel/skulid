@@ -38,6 +38,9 @@ func (a *AccountTokenSource) Token() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
+	if acct == nil {
+		return nil, fmt.Errorf("account %d no longer exists", a.accountID)
+	}
 	refresh, err := a.sealer.Open(acct.RefreshTokenSealed)
 	if err != nil {
 		return nil, err

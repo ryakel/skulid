@@ -79,6 +79,9 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	if err != nil {
 		return err
 	}
+	if acct == nil {
+		return fmt.Errorf("account %d for calendar %d no longer exists", cal.AccountID, cal.ID)
+	}
 
 	wh, err := hours.Parse(db.EffectiveCalendarHours(cal, acct, db.HoursWorking))
 	if err != nil {
@@ -469,6 +472,9 @@ func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
 	acct, err := s.accounts.Get(ctx, cal.AccountID)
 	if err != nil {
 		return err
+	}
+	if acct == nil {
+		return fmt.Errorf("account %d for calendar %d no longer exists", cal.AccountID, cal.ID)
 	}
 
 	wh, err := hours.Parse(db.EffectiveCalendarHours(cal, acct, db.HoursKind(h.HoursKind)))

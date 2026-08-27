@@ -65,9 +65,15 @@ func (r *AccountRepo) UpdateHours(ctx context.Context, id int64, working, person
 	return err
 }
 
+// Get returns nil, nil when no such account exists -- the repo convention for
+// "not found is not an error", matching GetBySub below.
 func (r *AccountRepo) Get(ctx context.Context, id int64) (*Account, error) {
 	row := r.pool.QueryRow(ctx, `SELECT `+accountSelectCols+` FROM account WHERE id = $1`, id)
-	return scanAccount(row)
+	a, err := scanAccount(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return a, err
 }
 
 func (r *AccountRepo) GetBySub(ctx context.Context, sub string) (*Account, error) {
