@@ -31,6 +31,9 @@ type taskOut struct {
 	ScheduledStartsAt string `json:"scheduled_starts_at,omitempty"`
 	ScheduledEndsAt   string `json:"scheduled_ends_at,omitempty"`
 	ScheduledEventID  string `json:"scheduled_event_id,omitempty"`
+	// ScheduleNote explains why a pending task isn't on the calendar, so the
+	// assistant can say so rather than guessing.
+	ScheduleNote string `json:"schedule_note,omitempty"`
 }
 
 func (t *Toolbox) listTasks(ctx context.Context, input json.RawMessage) (string, error) {
@@ -209,18 +212,39 @@ func (t *Toolbox) deleteTask(ctx context.Context, input json.RawMessage) (string
 	if err != nil || task == nil {
 		return "", fmt.Errorf("task #%d not found", p.TaskID)
 	}
-	if task.ScheduledEventID != "" {
-		if cal, err := t.calendars.Get(ctx, task.TargetCalendarID); err == nil {
-			if cli, err := t.clientFor(ctx, cal.AccountID); err == nil {
-				_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, task.ScheduledEventID)
-			}
-		}
-	}
+	t.deleteTaskEvents(ctx, task)
 	if err := t.tasks.Delete(ctx, p.TaskID); err != nil {
 		return "", err
 	}
 	t.logAudit(ctx, "delete_task", "", fmt.Sprintf("deleted task #%d", p.TaskID))
 	return marshalToolResult(map[string]any{"task_id": p.TaskID, "status": "deleted"})
+}
+
+// deleteTaskEvents removes every calendar block a task holds. A long task can
+// be split across several, so deleting only the summary event would leave the
+// rest orphaned on the user's calendar.
+func (t *Toolbox) deleteTaskEvents(ctx context.Context, task *db.Task) {
+	cal, err := t.calendars.Get(ctx, task.TargetCalendarID)
+	if err != nil || cal == nil {
+		return
+	}
+	cli, err := t.clientFor(ctx, cal.AccountID)
+	if err != nil {
+		return
+	}
+	seen := map[string]bool{}
+	if t.taskChunks != nil {
+		chunks, _ := t.taskChunks.ListByTask(ctx, task.ID)
+		for _, c := range chunks {
+			_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, c.GoogleEventID)
+			seen[c.GoogleEventID] = true
+		}
+	}
+	// Belt and braces: a task placed before task_chunk existed still has only
+	// its summary event to clean up.
+	if task.ScheduledEventID != "" && !seen[task.ScheduledEventID] {
+		_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, task.ScheduledEventID)
+	}
 }
 
 func taskToOut(x db.Task) taskOut {
@@ -234,6 +258,7 @@ func taskToOut(x db.Task) taskOut {
 		TargetCalendarID: x.TargetCalendarID,
 		CategoryID:       x.CategoryID,
 		ScheduledEventID: x.ScheduledEventID,
+		ScheduleNote:     x.ScheduleNote,
 	}
 	if x.DueAt != nil {
 		o.DueAt = x.DueAt.Format(time.RFC3339)

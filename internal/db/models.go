@@ -150,20 +150,27 @@ const (
 )
 
 type Task struct {
-	ID                int64
-	Title             string
-	Notes             string
-	Priority          string
-	DurationMinutes   int
-	DueAt             *time.Time
-	Status            string
-	TargetCalendarID  int64
-	CategoryID        *int64
+	ID               int64
+	Title            string
+	Notes            string
+	Priority         string
+	DurationMinutes  int
+	DueAt            *time.Time
+	Status           string
+	TargetCalendarID int64
+	CategoryID       *int64
+	// ScheduledEventID / ScheduledStartsAt / ScheduledEndsAt summarise the
+	// FIRST chunk. task_chunk holds every block; these three are what the
+	// list, the planner and the AI tools read for "when is this".
 	ScheduledEventID  string
 	ScheduledStartsAt *time.Time
 	ScheduledEndsAt   *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// ScheduleNote explains why the task isn't on the calendar, so a task
+	// stuck at pending says so rather than leaving the user to infer it from
+	// an empty day. Cleared on every successful placement.
+	ScheduleNote string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Habit struct {

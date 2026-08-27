@@ -161,6 +161,7 @@ func jsonOrNil(wh hours.WorkingHours) json.RawMessage {
 func (s *Server) handleBuffersPage(w http.ResponseWriter, r *http.Request) {
 	data := s.pageData(r, "Buffers")
 	data["Buffers"] = db.LoadBuffers(r.Context(), s.Settings)
+	data["TaskMinChunkMinutes"] = db.TaskMinChunkMinutes(r.Context(), s.Settings)
 	s.render(w, "buffers", data)
 }
 
@@ -175,6 +176,21 @@ func (s *Server) handleBuffersSave(w http.ResponseWriter, r *http.Request) {
 		TravelMinutes:         int(parseInt64(r.FormValue("travel_minutes"))),
 	}
 	if err := db.SaveBuffers(r.Context(), s.Settings, b); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Empty means "use the default"; anything else has to be a positive whole
+	// number of minutes, since a zero or negative minimum would let a task
+	// shatter into arbitrarily small fragments.
+	minChunk := strings.TrimSpace(r.FormValue("task_min_chunk_minutes"))
+	if minChunk != "" {
+		n, err := strconv.Atoi(minChunk)
+		if err != nil || n < 5 || n > 480 {
+			http.Error(w, "minimum task block must be between 5 and 480 minutes", http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.Settings.Set(r.Context(), db.SettingTaskMinChunkMinutes, minChunk); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

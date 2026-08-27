@@ -36,7 +36,8 @@ scheduler interprets your hours in this timezone, so DST transitions
 ## Where the helpers live
 
 The pure window arithmetic — `Parse`, `Expand`, `Merge`,
-`SubtractBusy`, `MergeWithGap`, `FirstFitSlot`, `NearestFitSlot` —
+`SubtractBusy`, `MergeWithGap`, `FirstFitSlot`, `NearestFitSlot`,
+`ChunkedSlots` —
 lives in `internal/hours/`. Tests cover the spring-forward DST case
 in America/Chicago.
 

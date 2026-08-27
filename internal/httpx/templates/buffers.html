@@ -17,6 +17,9 @@
   <label>Decompression after meetings (minutes)
     <input type="number" min="0" max="240" name="decompression_minutes" value="{{.Buffers.DecompressionMinutes}}">
   </label>
+  <label>Minimum task block (minutes) <span class="muted">(a task too long for one gap is split into pieces at least this long)</span>
+    <input type="number" min="5" max="480" name="task_min_chunk_minutes" value="{{.TaskMinChunkMinutes}}">
+  </label>
   <label>Travel time before &amp; after located events (minutes) <span class="muted">(only meetings with a physical location &mdash; video-call links don&rsquo;t count)</span>
     <input type="number" min="0" max="240" name="travel_minutes" value="{{.Buffers.TravelMinutes}}">
   </label>

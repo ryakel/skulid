@@ -31,21 +31,61 @@ When you save a task, the scheduler asynchronously:
    That costs no extra Google calls: skulid recorded each of those
    windows when it wrote them.
 4. Applies any configured [buffer padding](Buffers).
-5. Calls `hours.FirstFitSlot` to find the earliest free window of the
-   right duration.
-6. Inserts (or updates, on reschedule) a Google event with
+5. Calls `hours.ChunkedSlots` to plan where the duration goes: one
+   contiguous block if there is room for one, otherwise several
+   (see below).
+6. Inserts (or updates, on reschedule) a Google event per block, with
    `extendedProperties.private.skulidManaged="1"` plus
-   `skulidTaskId=<id>` so the rule engine doesn't loop on it.
+   `skulidTaskId=<id>` so the rule engine doesn't loop on them.
 
-If no fit exists, the task stays `pending` — bump the due date or
-clear an existing block out of the way.
+If nothing can be placed, the task stays `pending` **and says why** —
+the reason appears under its status on the tasks list, e.g. "Only 6h of
+the 8h needed would fit" or "No free time before Fri May 1, 5:00 PM".
+
+## Splitting a long task
+
+A task longer than any single free gap is split across several blocks
+rather than left unplaced. "8 hours of writing, due Friday" lands in
+whatever gaps exist between now and Friday.
+
+The rules:
+
+- **One block wins whenever it can.** If the whole duration fits in a
+  single free window, that is what you get — an ordinary task looks and
+  behaves exactly as it always did, with no churn.
+- **Pieces are at least the minimum task block**, set on
+  **Settings → Buffers** and defaulting to 30 minutes. Gaps shorter than
+  that are skipped rather than filled, so an eight-hour task doesn't
+  shatter into a dozen fragments wedged between meetings. Raise it if
+  you want fewer, longer sittings.
+- **The last piece may be short.** A 15-minute tail beats leaving the
+  whole task unplaced over it.
+- **At most 8 blocks**, as a backstop against a pathological calendar.
+- **Placement is all-or-nothing.** If the whole duration can't be
+  covered, nothing is booked — booking 6 of 8 hours and calling the task
+  scheduled would be a lie you only discover on Friday. The note says
+  how close it got.
+- Split blocks are titled `Write the report (1/3)`, `(2/3)`, `(3/3)`, so
+  they read as one task rather than three duplicates. A single-block
+  task keeps its plain title.
+
+Each block is a row in `task_chunk`. The task's own
+`scheduled_starts_at` / `scheduled_ends_at` summarise the **first**
+block, which is what the tasks list, the planner and the AI assistant
+show; the tasks list adds "(first of N blocks)" when there is more than
+one.
+
+Re-placement reconciles rather than rebuilds: blocks are moved in place
+where the counts line up, extras are deleted and shortfalls inserted, so
+the churn on your calendar is limited to the blocks that actually moved.
+Deleting a task deletes **all** of its blocks.
 
 ## Manual scheduling
 
 The **Schedule** button on a task row triggers an immediate placement.
 **Done** marks the task `completed` and leaves the existing event in
 place (it really happened — the calendar should still show it).
-**Delete** removes the task and its scheduled event.
+**Delete** removes the task and every block it holds.
 
 ## Audit log
 
@@ -54,8 +94,11 @@ Every placement / reschedule / drop lands in the audit log with
 
 ## Limitations
 
-- **Single-block placement.** Tasks aren't split into chunks — if
-  duration > the largest free window, the task stays pending.
+- **Blocks are re-planned wholesale, not pinned.** Every placement pass
+  re-derives the whole set from current availability, so a block can
+  move when the calendar around it changes. Reconciliation keeps that
+  down to the blocks that genuinely have to move, but skulid does not
+  promise a block stays put once you have seen it.
 - **Placement fails closed.** If any connected account's freebusy can't
   be fetched — a revoked token, an API error — the task isn't placed at
   all rather than placed against a busy set known to be incomplete.

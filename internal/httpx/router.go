@@ -41,6 +41,7 @@ type Server struct {
 	Audit          *db.AuditRepo
 	Categories     *db.CategoryRepo
 	Tasks          *db.TaskRepo
+	TaskChunks     *db.TaskChunkRepo
 	Habits         *db.HabitRepo
 	Occurrences    *db.HabitOccurrenceRepo
 	Scheduler      *syncengine.Scheduler

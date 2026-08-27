@@ -91,6 +91,7 @@ func run(log *slog.Logger) error {
 	audit := db.NewAuditRepo(pool)
 	categories := db.NewCategoryRepo(pool)
 	tasks := db.NewTaskRepo(pool)
+	taskChunks := db.NewTaskChunkRepo(pool)
 	habits := db.NewHabitRepo(pool)
 	occurrences := db.NewHabitOccurrenceRepo(pool)
 	bufferEvents := db.NewBufferEventRepo(pool)
@@ -114,7 +115,7 @@ func run(log *slog.Logger) error {
 	engine := syncengine.NewEngine(rules, accounts, calendars, links, audit, clientFor, log)
 	smartEngine := syncengine.NewSmartBlockEngine(blocks, managed, calendars, audit, clientFor, log)
 	managedWindows := db.NewManagedWindowRepo(pool)
-	scheduler := syncengine.NewScheduler(tasks, habits, occurrences, accounts, calendars,
+	scheduler := syncengine.NewScheduler(tasks, taskChunks, habits, occurrences, accounts, calendars,
 		managedWindows, settings, audit, clientFor, log)
 	bufferEngine := syncengine.NewBufferEngine(calendars, accounts, settings, bufferEvents, audit, clientFor, log)
 
@@ -131,7 +132,7 @@ func run(log *slog.Logger) error {
 			ai.NewClient(cfg.AnthropicAPIKey, cfg.AnthropicModel),
 			aiConversations, aiMessages, aiPending,
 			accounts, calendars, audit,
-			tasks, habits, occurrences, scheduler,
+			tasks, taskChunks, habits, occurrences, scheduler,
 			clientFor, log,
 		)
 		log.Info("ai assistant enabled", "model", cfg.AnthropicModel)
@@ -184,6 +185,7 @@ func run(log *slog.Logger) error {
 		Audit:           audit,
 		Categories:      categories,
 		Tasks:           tasks,
+		TaskChunks:      taskChunks,
 		Habits:          habits,
 		Occurrences:     occurrences,
 		Scheduler:       scheduler,

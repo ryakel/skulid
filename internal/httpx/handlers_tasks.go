@@ -19,6 +19,10 @@ const taskTimeout = 90 * time.Second
 type taskRow struct {
 	Task          db.Task
 	CalendarLabel string
+	// Blocks is how many calendar blocks the task occupies. A long task on a
+	// busy calendar is split, so "1 of 3" needs saying on the list too, not
+	// only on the events themselves.
+	Blocks int
 }
 
 func (s *Server) handleTasksPage(w http.ResponseWriter, r *http.Request) {
@@ -34,10 +38,16 @@ func (s *Server) handleTasksPage(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := make([]taskRow, 0, len(tasks))
 	for _, t := range tasks {
-		rows = append(rows, taskRow{
+		row := taskRow{
 			Task:          t,
 			CalendarLabel: calLabel(idx, t.TargetCalendarID),
-		})
+		}
+		if s.TaskChunks != nil {
+			if chunks, err := s.TaskChunks.ListByTask(r.Context(), t.ID); err == nil {
+				row.Blocks = len(chunks)
+			}
+		}
+		rows = append(rows, row)
 	}
 	data := s.pageData(r, "Tasks")
 	data["Tasks"] = rows
@@ -154,14 +164,9 @@ func (s *Server) handleTaskDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad id", http.StatusBadRequest)
 		return
 	}
-	t, _ := s.Tasks.Get(r.Context(), id)
-	if t != nil && t.ScheduledEventID != "" {
-		if cal, err := s.Calendars.Get(r.Context(), t.TargetCalendarID); err == nil {
-			if cli, err := s.ClientFor(r.Context(), cal.AccountID); err == nil {
-				_ = cli.DeleteEvent(r.Context(), cal.GoogleCalendarID, t.ScheduledEventID)
-			}
-		}
-	}
+	s.deleteTaskEvents(r.Context(), id)
+	// task_chunk cascades on the task row, so the rows go with it; the Google
+	// events above are the part that has to be cleaned up by hand.
 	if err := s.Tasks.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -198,6 +203,37 @@ func (s *Server) handleTaskComplete(w http.ResponseWriter, r *http.Request) {
 	// Leave the scheduled event in place — completing a task means it
 	// happened, not that the calendar block was wrong.
 	http.Redirect(w, r, "/tasks", http.StatusFound)
+}
+
+// deleteTaskEvents removes every calendar block a task holds. A long task can
+// be split across several, so deleting only the summary event would leave the
+// rest orphaned on the user's calendar with nothing left pointing at them.
+func (s *Server) deleteTaskEvents(ctx context.Context, taskID int64) {
+	t, _ := s.Tasks.Get(ctx, taskID)
+	if t == nil {
+		return
+	}
+	cal, err := s.Calendars.Get(ctx, t.TargetCalendarID)
+	if err != nil || cal == nil {
+		return
+	}
+	cli, err := s.ClientFor(ctx, cal.AccountID)
+	if err != nil {
+		return
+	}
+	seen := map[string]bool{}
+	if s.TaskChunks != nil {
+		chunks, _ := s.TaskChunks.ListByTask(ctx, taskID)
+		for _, c := range chunks {
+			_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, c.GoogleEventID)
+			seen[c.GoogleEventID] = true
+		}
+	}
+	// Belt and braces: a task placed before task_chunk existed, or one whose
+	// chunk rows went missing, still has its summary event to clean up.
+	if t.ScheduledEventID != "" && !seen[t.ScheduledEventID] {
+		_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, t.ScheduledEventID)
+	}
 }
 
 // placeTaskAsync runs the scheduler outside the request context with its own

@@ -24,6 +24,7 @@ type Agent struct {
 	calendars     *db.CalendarRepo
 	audit         *db.AuditRepo
 	tasks         *db.TaskRepo
+	taskChunks    *db.TaskChunkRepo
 	habits        *db.HabitRepo
 	occurrences   *db.HabitOccurrenceRepo
 	scheduler     *syncengine.Scheduler
@@ -39,6 +40,7 @@ func NewAgent(client *Client,
 	calendars *db.CalendarRepo,
 	audit *db.AuditRepo,
 	tasks *db.TaskRepo,
+	taskChunks *db.TaskChunkRepo,
 	habits *db.HabitRepo,
 	occurrences *db.HabitOccurrenceRepo,
 	scheduler *syncengine.Scheduler,
@@ -54,6 +56,7 @@ func NewAgent(client *Client,
 		calendars:     calendars,
 		audit:         audit,
 		tasks:         tasks,
+		taskChunks:    taskChunks,
 		habits:        habits,
 		occurrences:   occurrences,
 		scheduler:     scheduler,
@@ -121,7 +124,7 @@ func (a *Agent) ResolvePendingAction(ctx context.Context, actionID int64, apply 
 
 	var resultJSON json.RawMessage
 	if apply {
-		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.tasks, a.habits, a.occurrences, a.scheduler, a.clientFor, action.ConversationID)
+		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.tasks, a.taskChunks, a.habits, a.occurrences, a.scheduler, a.clientFor, action.ConversationID)
 		resultStr, err := tb.Execute(ctx, action.ToolName, action.ToolInput)
 		isError := err != nil
 		if err != nil {
@@ -229,7 +232,7 @@ func (a *Agent) advance(ctx context.Context, convID int64) error {
 			return nil
 		}
 
-		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.tasks, a.habits, a.occurrences, a.scheduler, a.clientFor, convID)
+		tb := NewToolbox(a.accounts, a.calendars, a.audit, a.tasks, a.taskChunks, a.habits, a.occurrences, a.scheduler, a.clientFor, convID)
 		var stagedAny bool
 		results := make([]ContentBlock, 0, len(toolUses))
 		for _, tu := range toolUses {
