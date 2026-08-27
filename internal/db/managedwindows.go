@@ -31,6 +31,12 @@ func NewManagedWindowRepo(pool *pgxpool.Pool) *ManagedWindowRepo {
 // so the same answer is available locally for the cost of one query and no
 // Google API calls at all.
 //
+// Travel buffers are deliberately absent. A decompression block is subtracted
+// because the protection it represents is already applied a second way -- the
+// scheduler pads every busy window by the decompression minutes -- so counting
+// the visible block too would double it. Travel has no such padding: the
+// visible block IS the protection, so it has to keep reading as busy.
+//
 // Overlap is half-open on both sides: a window ending exactly at `from`, or
 // starting exactly at `to`, does not overlap.
 func (r *ManagedWindowRepo) InRange(ctx context.Context, from, to time.Time) ([]ManagedWindow, error) {
@@ -41,8 +47,8 @@ func (r *ManagedWindowRepo) InRange(ctx context.Context, from, to time.Time) ([]
 		SELECT starts_at, ends_at FROM habit_occurrence
 		WHERE ends_at > $1 AND starts_at < $2
 		UNION ALL
-		SELECT starts_at, ends_at FROM decompression_event
-		WHERE ends_at > $1 AND starts_at < $2
+		SELECT starts_at, ends_at FROM buffer_event
+		WHERE buffer_type = 'decompression' AND ends_at > $1 AND starts_at < $2
 		UNION ALL
 		SELECT scheduled_starts_at, scheduled_ends_at FROM task
 		WHERE scheduled_starts_at IS NOT NULL

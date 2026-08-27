@@ -86,8 +86,8 @@ the suite, update the suite. Run with `go test -race -count=1 ./...`.
 - All goroutines listen for `m.stop` so shutdown is clean.
 - Smart-block recompute is debounced (15s) per block — preserve that
   when adding new triggers.
-- Decompression recompute is debounced (15s) per calendar; fires
-  after every successful incremental sync.
+- Buffer recompute (decompress + travel) is debounced (15s) per
+  calendar; fires after every successful incremental sync.
 - The 6-hour maintenance tick (`runMaintenance`) re-runs `PlaceHabit`
   and `PlaceTask` so rolling horizons stay current. Adding a new
   scheduler-driven entity? Hook it in there.

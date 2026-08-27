@@ -72,7 +72,7 @@ through it.
 | `task`               | One-shot scheduled work; priority + duration + due + scheduled placement |
 | `habit`              | Recurring soft block (e.g. Lunch); ideal_time + flex + days_of_week    |
 | `habit_occurrence`   | Per-day instance of a habit (event id + window)                        |
-| `decompression_event`| Tracks visible Decompress buffers written after non-managed meetings    |
+| `buffer_event`       | Tracks visible Decompress and Travel buffers around non-managed meetings |
 | `audit_log`          | What skulid did and why                                                |
 | `ai_conversation`    | One AI assistant chat (30-day TTL)                                     |
 | `ai_message`         | One turn within a conversation                                         |
@@ -131,7 +131,7 @@ sync, the engine skips the update.
     enabled habit and `PlaceTask` for any pending or expired-scheduled
     task, so rolling horizons stay current.
 - **Smart-block recompute** is debounced 15s per block.
-- **Decompression recompute** is debounced 15s per calendar; fires
+- **Buffer recompute** (decompress + travel) is debounced 15s per calendar; fires
   after every successful incremental sync of that calendar.
 - All Google API calls are wrapped in `context.Context` with sensible
   per-request deadlines.
