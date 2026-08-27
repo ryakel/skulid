@@ -36,9 +36,11 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-skulid}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-skulid}?sslmode=disable
       LISTEN_ADDR: ":8567"
-      # All values below have dev placeholders so the stack boots without .env
-      # for smoke testing. Replace with real values before connecting any actual
-      # Google account — the OAuth round-trip won't work otherwise.
+      # The placeholders below are recognised by the daemon, which REFUSES TO
+      # START on any of them. That is deliberate: a missing or misnamed .env
+      # would otherwise boot a working-looking instance whose tokens are sealed
+      # with a key published in this repo. To smoke-test without a .env, set
+      # SKULID_ALLOW_INSECURE_CONFIG=1 — every page then carries a red banner.
       EXTERNAL_URL: ${EXTERNAL_URL:-http://localhost:8567}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev}

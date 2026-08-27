@@ -30,6 +30,34 @@ openssl rand -base64 32   # ENCRYPTION_KEY
 | `ANTHROPIC_API_KEY`  | unset (off)      | Enable the AI assistant; see [AI Assistant](AI-Assistant) |
 | `ANTHROPIC_MODEL`    | `claude-opus-4-7` | Model the assistant uses                    |
 
+## Refusing to start on unsafe values
+
+Every variable in the Required table above is also checked by **content**, not
+just presence. The daemon exits at startup if any of these hold:
+
+| Variable | Rejected when |
+| --- | --- |
+| `SESSION_SECRET` | equal to the `dev-only-…` compose placeholder, or shorter than 32 bytes |
+| `ENCRYPTION_KEY` | decodes to 32 zero bytes (the compose placeholder) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | literally `dev` |
+| `EXTERNAL_URL` | not `https://` |
+
+This exists because `docker-compose.yml` supplies a default for every one of
+them, so a `.env` that is missing, misnamed, or sitting in the wrong directory
+does **not** produce an error — it produces a running instance whose refresh
+tokens are sealed with a key published in this repository and whose session
+cookies are signed with a secret anyone can read. Presence checks cannot catch
+that. Content checks can.
+
+The startup error names each offending variable and what to do about it.
+
+### Overriding it
+
+`SKULID_ALLOW_INSECURE_CONFIG=1` downgrades the refusal to a startup `WARN`
+plus a red banner on every page, including the login page. It exists for local
+smoke testing without a `.env`. Never set it in production — an instance
+running this way cannot protect the tokens it holds.
+
 ## Development overrides
 
 These exist for UI mockup work without doing a real Google OAuth
