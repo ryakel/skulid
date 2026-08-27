@@ -22,9 +22,14 @@ preferred time, drifting only as far as you allow.
 ## How placement works
 
 The scheduler walks each day in `[today, today + horizon)`. For days
-matching a `days_of_week` entry it pulls a per-day freebusy on the
-target calendar, applies buffer padding, and calls
+matching a `days_of_week` entry it pulls a per-day freebusy across
+**every enabled calendar on every connected account** — not just the
+target — applies each calendar's own buffer padding, and calls
 `hours.NearestFitSlot(duration, flex, ideal)`.
+
+Habits share the placement path with [Tasks](Tasks), so the same two
+caveats apply: placement fails closed when an account's freebusy can't
+be fetched, and skulid's own managed blocks count as busy.
 
 - If a slot fits within `±flex` of `ideal`, an occurrence is created
   (or moved if it already existed for that date).
