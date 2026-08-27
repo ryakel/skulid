@@ -54,6 +54,17 @@ services:
       SKULID_DEV_USER_EMAIL: ${SKULID_DEV_USER_EMAIL:-dev@local}
     ports:
       - "${HOST_PORT:-8567}:8567"
+    # The image is distroless -- no shell, no curl -- so the probe is the
+    # skulid binary itself asking its own /healthz. Without this, Docker only
+    # notices a process that exits: a daemon that is up but wedged would never
+    # be restarted.
+    healthcheck:
+      test: ["CMD", "/skulid", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Long enough to cover migrations on a cold start.
+      start_period: 40s
     logging: *default-logging
 
 volumes:
