@@ -29,6 +29,7 @@ openssl rand -base64 32   # ENCRYPTION_KEY
 | `LISTEN_ADDR`        | `:8567`          | TCP address the HTTP server binds to         |
 | `ANTHROPIC_API_KEY`  | unset (off)      | Enable the AI assistant; see [AI Assistant](AI-Assistant) |
 | `ANTHROPIC_MODEL`    | `claude-opus-4-7` | Model the assistant uses                    |
+| `AUDIT_RETENTION_DAYS` | `90`           | How long `audit_log` rows are kept. `0` disables pruning and lets the table grow forever. |
 
 ## Refusing to start on unsafe values
 

@@ -32,16 +32,16 @@ const (
 // Manager coordinates per-account work and the cross-cutting scheduler. Jobs
 // are fan-outs into per-account inboxes so a slow account never blocks others.
 type Manager struct {
-	pool        *pgxpool.Pool
-	accounts    *db.AccountRepo
-	calendars   *db.CalendarRepo
-	tokens      *db.SyncTokenRepo
-	rules       *db.SyncRuleRepo
-	blocks      *db.SmartBlockRepo
-	links       *db.EventLinkRepo
-	audit       *db.AuditRepo
-	clientFor   syncengine.ClientFor
-	engine      *syncengine.Engine
+	pool         *pgxpool.Pool
+	accounts     *db.AccountRepo
+	calendars    *db.CalendarRepo
+	tokens       *db.SyncTokenRepo
+	rules        *db.SyncRuleRepo
+	blocks       *db.SmartBlockRepo
+	links        *db.EventLinkRepo
+	audit        *db.AuditRepo
+	clientFor    syncengine.ClientFor
+	engine       *syncengine.Engine
 	smartEngine  *syncengine.SmartBlockEngine
 	decompEngine *syncengine.DecompressionEngine // optional
 	scheduler    *syncengine.Scheduler           // optional; gates daily-maintenance tick
@@ -54,6 +54,9 @@ type Manager struct {
 	// AI conversation cleanup. Both nil if the assistant feature is unused.
 	aiConversations *db.AIConversationRepo
 	aiMaxAge        time.Duration
+
+	// audit_log retention. Zero disables pruning entirely.
+	auditMaxAge time.Duration
 
 	mu      stdsync.Mutex
 	workers map[int64]*accountWorker
@@ -80,19 +83,19 @@ func NewManager(pool *pgxpool.Pool,
 	audit *db.AuditRepo, clientFor syncengine.ClientFor, engine *syncengine.Engine,
 	smartEngine *syncengine.SmartBlockEngine, externalURL string, log *slog.Logger) *Manager {
 	return &Manager{
-		pool:        pool,
-		accounts:    accounts,
-		calendars:   calendars,
-		tokens:      tokens,
-		rules:       rules,
-		blocks:      blocks,
-		links:       links,
-		audit:       audit,
-		clientFor:   clientFor,
-		engine:      engine,
-		smartEngine: smartEngine,
-		externalURL: externalURL,
-		log:         log,
+		pool:           pool,
+		accounts:       accounts,
+		calendars:      calendars,
+		tokens:         tokens,
+		rules:          rules,
+		blocks:         blocks,
+		links:          links,
+		audit:          audit,
+		clientFor:      clientFor,
+		engine:         engine,
+		smartEngine:    smartEngine,
+		externalURL:    externalURL,
+		log:            log,
 		workers:        map[int64]*accountWorker{},
 		debounce:       map[int64]*time.Timer{},
 		decompDebounce: map[int64]*time.Timer{},
@@ -257,9 +260,15 @@ func (m *Manager) SetAIConversationCleanup(repo *db.AIConversationRepo, maxAge t
 	m.aiMaxAge = maxAge
 }
 
+// SetAuditRetention wires in how long audit rows are kept. Zero or negative
+// disables the prune, which is the pre-existing behaviour.
+func (m *Manager) SetAuditRetention(maxAge time.Duration) {
+	m.auditMaxAge = maxAge
+}
+
 // runScheduler runs the polling fallback, watch-channel renewal, AI
-// conversation cleanup, and the daily maintenance pass that keeps habit/task
-// placements fresh as the horizon walks forward.
+// conversation and audit-log cleanup, and the daily maintenance pass that
+// keeps habit/task placements fresh as the horizon walks forward.
 func (m *Manager) runScheduler(ctx context.Context) {
 	pollTicker := time.NewTicker(pollInterval)
 	renewTicker := time.NewTicker(channelRenewTick)
@@ -286,6 +295,7 @@ func (m *Manager) runScheduler(ctx context.Context) {
 			m.runPollPass(ctx)
 			m.runRenewPass(ctx)
 			m.runAICleanup(ctx)
+			m.runAuditCleanup(ctx)
 		case <-maintStartup.C:
 			m.runMaintenance(ctx)
 		case <-pollTicker.C:
@@ -294,6 +304,7 @@ func (m *Manager) runScheduler(ctx context.Context) {
 			m.runRenewPass(ctx)
 		case <-cleanupTicker.C:
 			m.runAICleanup(ctx)
+			m.runAuditCleanup(ctx)
 		case <-maintTicker.C:
 			m.runMaintenance(ctx)
 		}
@@ -366,6 +377,25 @@ func (m *Manager) runAICleanup(ctx context.Context) {
 	}
 	if n > 0 {
 		m.log.Info("ai cleanup", "deleted_conversations", n)
+	}
+}
+
+// runAuditCleanup prunes audit rows past the retention window. audit_log is
+// the highest-churn table in the schema and the UI only ever shows the last
+// 200 rows, so without this it grows forever as pure disk -- which on a
+// homelab Postgres with hand-taken backups is how a volume quietly fills a
+// year after anyone last thought about it.
+func (m *Manager) runAuditCleanup(ctx context.Context) {
+	if m.audit == nil || m.auditMaxAge <= 0 {
+		return
+	}
+	n, err := m.audit.DeleteOlderThan(ctx, m.auditMaxAge)
+	if err != nil {
+		m.log.Error("audit cleanup failed", "err", err)
+		return
+	}
+	if n > 0 {
+		m.log.Info("audit cleanup", "deleted_rows", n, "retention", m.auditMaxAge)
 	}
 }
 
