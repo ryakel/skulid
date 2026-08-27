@@ -52,7 +52,7 @@ For deeper inspection, the table is `audit_log` in Postgres.
 ### Retention
 
 `audit_log` is the highest-churn table in the schema — smart-block and
-decompression recompute both re-diff on every sync, so a busy calendar
+buffer recompute both re-diff on every sync, so a busy calendar
 appends rows continuously. Since the UI only ever shows the last 200,
 everything older is pure disk.
 
@@ -166,7 +166,7 @@ SELECT email, needs_reauth, reauth_reason, reauth_detected_at FROM account;
 
 Google's Calendar API is quota-limited, and skulid's workload is bursty:
 backfill walks history in one pass, the Planner issues one `Events.list` per
-connected calendar per page load, and smart-block and decompression recompute
+connected calendar per page load, and smart-block and buffer recompute
 fire on a 15-second debounce — all multiplied by connected account.
 
 Rate-limited calls are retried automatically with exponential backoff and
