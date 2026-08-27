@@ -172,6 +172,15 @@ main { padding: 2rem 2.25rem 2.5rem; max-width: 1400px; }
   background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: .82rem;
 }
 
+.insecure-banner {
+  padding: .75rem .95rem; margin-bottom: 1rem; border-radius: var(--radius-md);
+  background: #7f1d1d; color: #fee2e2; border: 1px solid #991b1b;
+  font-size: .85rem; line-height: 1.5;
+}
+.insecure-banner code { background: #991b1b; color: #fff; padding: .05rem .3rem; border-radius: 4px; }
+.insecure-banner ul { margin: .4rem 0 .3rem; padding-left: 1.2rem; }
+.insecure-banner li { margin: .15rem 0; }
+
 .dev-banner {
   padding: .55rem .95rem; margin-bottom: 1rem; border-radius: var(--radius-md);
   background: #fef3c7; color: #78350f; border: 1px solid #fcd34d;

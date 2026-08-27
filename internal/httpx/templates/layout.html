@@ -49,6 +49,12 @@
 
   <main>
     {{if .DevAuthBypass}}<div class="dev-banner">⚠ DEV AUTH BYPASS — every visitor authenticates as the synthetic owner. Never enable in production.</div>{{end}}
+    {{if .InsecureFindings}}<div class="insecure-banner">
+      <strong>⚠ INSECURE CONFIGURATION.</strong>
+      This instance is running with values that are not safe to expose to the internet:
+      <ul>{{range .InsecureFindings}}<li><code>{{.Var}}</code> {{.Reason}}</li>{{end}}</ul>
+      Stored Google tokens and session cookies cannot be trusted until this is fixed.
+    </div>{{end}}
     {{if .ReauthAccounts}}<div class="reauth-banner">
       <strong>Sync is stopped.</strong>
       Google will not renew access for
