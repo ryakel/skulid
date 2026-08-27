@@ -151,9 +151,34 @@ deployment that wrote without the loop key.
 
 ## Upgrades
 
-`git pull && docker compose up -d --build`. Migrations run on startup.
-The schema is at v1 — breaking changes will get a numbered migration
-file under `migrations/`.
+```bash
+docker compose up -d
+```
+
+That's the whole thing. The `app` service is `pull_policy: always`, so
+`up` re-pulls `ghcr.io/ryakel/skulid:latest` every time — you do not need
+`docker compose pull` first.
+
+Two things that are **not** part of upgrading:
+
+- **`--build` does nothing.** `docker-compose.yml` pulls a published image
+  and has no `build:` stanza, so there is no build context for the flag to
+  act on. Nothing here compiles on your machine.
+- **`git pull` doesn't fetch the new binary.** That comes from the
+  registry. Pull only when you want an updated `docker-compose.yml` or
+  `.env.example`.
+
+Pin a specific release with `SKULID_TAG=v0.1.0` in `.env` if you'd rather
+not track `:latest`.
+
+Migrations run on startup. Breaking changes get a numbered migration file
+under `migrations/`; to see which schema version an instance is actually
+on, ask the database rather than the docs:
+
+```bash
+docker compose exec db psql -U skulid -d skulid \
+  -c "select max(version_id) from goose_db_version;"
+```
 
 ## Resetting the instance
 

@@ -89,9 +89,10 @@ on push to `main`).
 
 ## Status
 
-Beta. Schema is at v1 with a single migration; breaking changes will
-get a numbered migration. The token sealing key is not auto-rotated —
-back up your `ENCRYPTION_KEY` somewhere offline.
+Beta. Breaking schema changes get a numbered migration under
+`migrations/`; an instance reports its own version via `goose_db_version`
+rather than a number pinned in prose here. The token sealing key is not
+auto-rotated — back up your `ENCRYPTION_KEY` somewhere offline.
 
 ## Stack
 
