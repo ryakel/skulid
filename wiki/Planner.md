@@ -13,15 +13,27 @@ strip across the top.
 - **Timeline**: 6am-10pm visible (anything outside that window isn't
   rendered yet — bump the constants in `handlers_planner.go` if you
   routinely have 5am or 11pm events).
-- **Events**: positioned absolutely within their day column.
+- **Events**: positioned absolutely within their day column. Concurrent
+  events are laid out in side-by-side lanes rather than stacked, so an
+  overlapping block is legible rather than hidden behind its neighbour.
   Background is a tint of the category color; left bar is the full
   saturation. Title and start time + duration shown on hover.
 
 ## Navigation
 
-Prev / Today / Next walk one ISO week at a time. The URL carries the
-selected week as `?w=YYYY-MM-DD` (any day; the handler snaps to the
-preceding Monday).
+Four view modes: **day**, **3-day**, **week** and **month**. Day, 3-day and
+week share the timeline; month renders as a 6×7 grid with leading and
+trailing spillover days dimmed. Pick one with the view selector; the choice
+persists as your default.
+
+Prev / Today / Next step by whatever the current view spans. The URL carries
+the state as:
+
+| Parameter | Meaning |
+| --- | --- |
+| `?view=` | `day`, `3day`, `week` or `month` |
+| `?at=YYYY-MM-DD` | the anchor date the view is built around |
+| `?w=YYYY-MM-DD` | legacy week anchor; honoured only when the view is `week` |
 
 ## Time zone
 
@@ -32,11 +44,8 @@ hours of that account at **Settings → Hours**.
 ## What it doesn't do (yet)
 
 - **Drag-and-drop rescheduling.** Move events in Google Calendar; the
-  next sync brings them back here.
+  next sync brings them back here. Tracked as SKUL-13.
 - **Inline event creation.** Use the AI assistant or `/tasks/new`.
-- **Overlapping event lanes.** Concurrent events stack on top of each
-  other — readable for 2-3 overlaps, busy if you really pack a slot.
-- **Multi-week views.** Just the current week.
 
 ## Performance
 
