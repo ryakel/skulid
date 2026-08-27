@@ -24,7 +24,19 @@ type Config struct {
 	// and a banner on every page when on. Never set in production.
 	DevAuthBypass bool
 	DevUserEmail  string
+
+	// InsecureFindings lists the ways this configuration is unsafe for
+	// production. Non-empty only when the operator explicitly opted in via
+	// EnvAllowInsecure -- otherwise Load refuses to return at all. The UI
+	// renders these as a banner so an opted-in instance can never be
+	// mistaken for a healthy one.
+	InsecureFindings []InsecureFinding
 }
+
+// EnvAllowInsecure names the opt-in that downgrades unsafe configuration from
+// a startup failure to a loud warning. Same shape as SKULID_DEV_AUTH_BYPASS:
+// off by default, never set in production.
+const EnvAllowInsecure = "SKULID_ALLOW_INSECURE_CONFIG"
 
 func Load() (*Config, error) {
 	c := &Config{
@@ -73,6 +85,16 @@ func Load() (*Config, error) {
 	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required env: %s", strings.Join(missing, ", "))
+	}
+
+	// Presence checks above cannot protect a compose deployment, because
+	// compose substitutes a placeholder for every one of these. Inspect the
+	// values themselves.
+	if findings := detectInsecure(c); len(findings) > 0 {
+		if !isTruthy(os.Getenv(EnvAllowInsecure)) {
+			return nil, insecureError(findings)
+		}
+		c.InsecureFindings = findings
 	}
 
 	return c, nil
