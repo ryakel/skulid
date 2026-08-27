@@ -20,10 +20,12 @@ import (
 // gensupport.SendRequest, which is the non-retrying path, so a 429 propagated
 // straight up into a background goroutine whose only handling is a log line.
 //
-// This lives in the HTTP transport rather than in Client's methods because
-// four call sites reach the raw service through Client.Service() -- the
-// planner, decompression, and two AI tools. A wrapper-level retry would have
-// missed every one of them, including the burstiest path there is.
+// This lives in the HTTP transport rather than in Client's methods so it
+// covers every request the generated service makes, however the call was
+// built. When it was written, four call sites reached the raw service through
+// a Service() accessor and a wrapper-level retry would have missed all of
+// them; that accessor is gone now, but the transport is still the right
+// place -- it cannot be bypassed by a new one.
 const (
 	maxRetryAttempts = 4
 	baseRetryDelay   = 500 * time.Millisecond

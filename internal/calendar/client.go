@@ -49,9 +49,7 @@ type Client struct {
 func New(ctx context.Context, ts oauth2.TokenSource) (*Client, error) {
 	// WithHTTPClient rather than WithTokenSource: building the client here
 	// means the retrying transport wraps every request the service makes,
-	// including the four call sites that reach the raw service through
-	// Service() and would otherwise bypass any retry added to this wrapper's
-	// own methods.
+	// not just the ones that happen to go through this wrapper's methods.
 	httpClient := oauth2.NewClient(ctx, ts)
 	httpClient.Transport = newRetryTransport(httpClient.Transport)
 
@@ -62,7 +60,50 @@ func New(ctx context.Context, ts oauth2.TokenSource) (*Client, error) {
 	return &Client{svc: svc}, nil
 }
 
-func (c *Client) Service() *calendar.Service { return c.svc }
+// ListEventsOptions is the shape every caller of Events.List in this codebase
+// actually wanted: a single time window, expanded recurrences, ordered by
+// start. Zero values mean "leave it to the API" except MaxResults, which
+// defaults to 250 rather than Google's 250-per-page-with-paging.
+type ListEventsOptions struct {
+	TimeMin time.Time
+	TimeMax time.Time
+	// Query filters server-side on Google's own free-text match. Empty means
+	// no filter.
+	Query      string
+	MaxResults int64
+}
+
+// ListEvents returns a single page of expanded events in [TimeMin, TimeMax).
+//
+// It exists so nothing outside this package needs the raw *calendar.Service.
+// Four call sites -- the planner, the buffer engine, and two AI tools -- used
+// to reach through a Service() accessor and build this exact query by hand,
+// which meant the client could not be swapped for a fake.
+func (c *Client) ListEvents(ctx context.Context, calendarID string, opt ListEventsOptions) ([]*calendar.Event, error) {
+	max := opt.MaxResults
+	if max <= 0 {
+		max = 250
+	}
+	call := c.svc.Events.List(calendarID).
+		Context(ctx).
+		SingleEvents(true).
+		MaxResults(max).
+		OrderBy("startTime")
+	if !opt.TimeMin.IsZero() {
+		call = call.TimeMin(opt.TimeMin.Format(time.RFC3339))
+	}
+	if !opt.TimeMax.IsZero() {
+		call = call.TimeMax(opt.TimeMax.Format(time.RFC3339))
+	}
+	if opt.Query != "" {
+		call = call.Q(opt.Query)
+	}
+	resp, err := call.Do()
+	if err != nil {
+		return nil, err
+	}
+	return resp.Items, nil
+}
 
 func (c *Client) ListCalendars(ctx context.Context) ([]*calendar.CalendarListEntry, error) {
 	var out []*calendar.CalendarListEntry
@@ -243,3 +284,26 @@ func IsManaged(ev *calendar.Event) bool {
 	props := ev.ExtendedProperties.Private
 	return props[PropManaged] == "1" || props[legacyPropManaged] == "1"
 }
+
+// API is everything skulid asks of Google Calendar. Client is the real
+// implementation; tests substitute a fake.
+//
+// The interface is declared here rather than in each consumer because there is
+// exactly one production implementation and the set of calls is small and
+// stable -- a per-package interface would be four copies of the same list.
+// Nothing outside this package touches *calendar.Service, so a fake only has
+// to satisfy these ten methods.
+type API interface {
+	ListCalendars(ctx context.Context) ([]*calendar.CalendarListEntry, error)
+	ListEvents(ctx context.Context, calendarID string, opt ListEventsOptions) ([]*calendar.Event, error)
+	IncrementalSync(ctx context.Context, calendarID, syncToken string, from time.Time) (*IncrementalSyncResult, error)
+	GetEvent(ctx context.Context, calendarID, eventID string) (*calendar.Event, error)
+	InsertEvent(ctx context.Context, calendarID string, ev *calendar.Event) (*calendar.Event, error)
+	UpdateEvent(ctx context.Context, calendarID, eventID string, ev *calendar.Event) (*calendar.Event, error)
+	DeleteEvent(ctx context.Context, calendarID, eventID string) error
+	FreeBusy(ctx context.Context, calendarIDs []string, start, end time.Time, tz string) (map[string][]*calendar.TimePeriod, error)
+	Watch(ctx context.Context, calendarID, channelID, address, token string, ttl time.Duration) (*calendar.Channel, error)
+	StopChannel(ctx context.Context, channelID, resourceID string) error
+}
+
+var _ API = (*Client)(nil)
