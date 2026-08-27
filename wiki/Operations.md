@@ -67,6 +67,40 @@ docker compose logs -f app \
   | jq 'select(.msg == "http") | "\(.method) \(.path) \(.status) \(.dur)"' -r
 ```
 
+## Container health
+
+Both services report health to Docker. `db` uses `pg_isready`; `app` probes
+its own `/healthz`:
+
+```bash
+docker compose ps
+```
+
+A wedged daemon — deadlocked, connection pool exhausted, stuck goroutine —
+keeps its process alive, so Docker's restart policy alone would never notice
+it. The healthcheck is what turns that into a restart.
+
+The probe is `skulid -healthcheck`, the same binary the container already
+runs. The runtime image is distroless: it has no shell, no `curl` and no
+`wget`, so a conventional `CMD-SHELL` healthcheck cannot work there. The
+binary probing itself avoids shipping a second one just to answer the
+question.
+
+To run it by hand:
+
+```bash
+docker compose exec app /skulid -healthcheck; echo "exit=$?"
+```
+
+`0` means serving, non-zero means not.
+
+**`/healthz` is a liveness check, not a readiness one.** It reports that the
+HTTP server is accepting and serving requests, and deliberately says nothing
+about Postgres. Gating it on the database would mean a DB blip restart-loops
+the app during an outage it did not cause — which lengthens the outage rather
+than shortening it. To check the database, query it directly (see
+[Upgrades](#upgrades)).
+
 ## Troubleshooting
 
 ### "Sync is stopped" banner / an account needs reconnecting

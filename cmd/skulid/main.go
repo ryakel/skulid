@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -30,6 +31,17 @@ import (
 var appVersion = "dev"
 
 func main() {
+	// Probe mode short-circuits before any logger or config exists: the
+	// container healthcheck runs this same binary, and it should answer with
+	// an exit code rather than a line of startup JSON.
+	if isHealthcheckInvocation(os.Args[1:]) {
+		if err := runHealthcheck(); err != nil {
+			fmt.Fprintln(os.Stderr, "healthcheck failed:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(log)
 
