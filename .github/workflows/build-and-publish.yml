@@ -231,7 +231,7 @@ jobs:
       # over an unfixable base CVE is its own kind of outage.
       - name: Scan image (PR)
         if: github.event_name == 'pull_request'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: skulid:pr-scan
           format: sarif
@@ -242,7 +242,7 @@ jobs:
 
       - name: Scan image (published)
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.app_version }}
           format: sarif
