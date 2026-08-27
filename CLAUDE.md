@@ -66,13 +66,15 @@ bidirectional rules can ping-pong indefinitely.
 The suite covers pure logic plus Postgres-backed repo tests. The
 Postgres ones skip unless `SKULID_TEST_DATABASE_URL` points at a server
 you don't mind them creating and dropping databases in; CI sets it
-against a service container. Google Calendar is still faked out only by
-absence — driving the rule engine end-to-end is open (see
-`wiki/Development.md`).
+against a service container. Google Calendar is faked by
+`internal/calendar/calfake`, an in-memory `calendar.API`, which is how
+the rule engine and the task scheduler are driven end-to-end.
 
 When you add new pure helpers, add tests. When you add a column or a
 migration, extend the matching repo round-trip test — that is what
-catches a select list you forgot to update. Run with
+catches a select list you forgot to update. When you touch the rule
+engine or the scheduler's reconcile, break the invariant and confirm
+the test fails; one that passes either way is worse than none. Run with
 `go test -race -count=1 ./...`.
 
 ## Areas that require care
