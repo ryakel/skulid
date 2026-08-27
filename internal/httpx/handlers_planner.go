@@ -13,6 +13,7 @@ import (
 
 	gcal "google.golang.org/api/calendar/v3"
 
+	"github.com/ryakel/skulid/internal/calendar"
 	"github.com/ryakel/skulid/internal/category"
 	"github.com/ryakel/skulid/internal/db"
 )
@@ -203,15 +204,13 @@ func (s *Server) fetchPlannerEvents(ctx context.Context, cals []db.Calendar, ran
 			calCtx, cancel := context.WithTimeout(ctx, plannerCalendarTimeout)
 			defer cancel()
 
-			resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
-				Context(calCtx).SingleEvents(true).
-				TimeMin(rangeStart.Format(time.RFC3339)).
-				TimeMax(rangeEnd.Format(time.RFC3339)).
-				MaxResults(500).OrderBy("startTime").Do()
+			events, err := cli.ListEvents(calCtx, cal.GoogleCalendarID, calendar.ListEventsOptions{
+				TimeMin: rangeStart, TimeMax: rangeEnd, MaxResults: 500,
+			})
 			if err != nil {
 				return
 			}
-			out[i].Events = resp.Items
+			out[i].Events = events
 		}(i, cal)
 	}
 	wg.Wait()

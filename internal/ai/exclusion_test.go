@@ -28,7 +28,7 @@ func (f *fakeChecker) IsAIExcluded(_ context.Context, id int64) (bool, error) {
 func TestGuardClientForBlocksExcludedAccount(t *testing.T) {
 	checker := &fakeChecker{excluded: map[int64]bool{7: true}}
 	reached := false
-	inner := func(context.Context, int64) (*calendar.Client, error) {
+	inner := func(context.Context, int64) (calendar.API, error) {
 		reached = true
 		return nil, nil
 	}
@@ -45,7 +45,7 @@ func TestGuardClientForBlocksExcludedAccount(t *testing.T) {
 func TestGuardClientForAllowsNormalAccount(t *testing.T) {
 	checker := &fakeChecker{excluded: map[int64]bool{7: true}}
 	reached := false
-	inner := func(context.Context, int64) (*calendar.Client, error) {
+	inner := func(context.Context, int64) (calendar.API, error) {
 		reached = true
 		return nil, nil
 	}
@@ -62,7 +62,7 @@ func TestGuardClientForAllowsNormalAccount(t *testing.T) {
 func TestGuardClientForDeniesOnCheckFailure(t *testing.T) {
 	checker := &fakeChecker{err: errors.New("db down")}
 	reached := false
-	inner := func(context.Context, int64) (*calendar.Client, error) {
+	inner := func(context.Context, int64) (calendar.API, error) {
 		reached = true
 		return nil, nil
 	}

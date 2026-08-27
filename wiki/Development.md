@@ -75,8 +75,9 @@ The default run covers pure logic (filter, transform, smart-block
 helpers, slot finders, crypto, sessions, calendar managed-event
 helpers, httpx helpers, renderer smoke test). Postgres-backed tests
 also live in the suite but skip unless you point them at a server —
-see [#integration-tests](#integration-tests). Driving the rule engine
-against a fake Google client is still outstanding (SKUL-23).
+see [#integration-tests](#integration-tests). Those drive the rule
+engine and the task scheduler end-to-end, against real rows and a fake
+Google.
 
 ## Security scanning
 
@@ -118,10 +119,12 @@ internal/
   ai/                 # Anthropic-powered assistant (optional feature)
   auth/               # OAuth, sessions, TOFU, middleware
   calendar/           # Google Calendar v3 wrapper + ext-properties helpers
+    calfake/          # in-memory calendar.API for tests
   category/           # pure event categorizer (no I/O)
   config/             # env-var loading
   crypto/             # AES-256-GCM token sealing
   db/                 # pgx repos + scanned models
+    dbtest/           # throwaway Postgres harness for tests
   hours/              # pure window/working-hours helpers + slot finders
   httpx/              # chi router, templates, handlers
   sync/               # rule engine, smart-block engine, task/habit scheduler
@@ -208,9 +211,47 @@ The DSN should point at a database you're happy for the suite to create
 and drop databases *next to* — it connects there as an admin and works
 in throwaway databases named after each test.
 
-The Google half is still outstanding: `*calendar.Client` needs to become
-an interface so a fake can be injected and the rule engine driven
-end-to-end. Tracked as SKUL-23.
+### The calendar fake
+
+`internal/calendar/calfake` is an in-memory `calendar.API`. It is a fake
+rather than a mock: it keeps real events in a map and answers reads from
+them, so a test asserts on the state Google would have ended up in
+rather than on a sequence of expected calls. That reads better for
+engines whose whole contract is "insert, update and delete these
+events".
+
+`Seed` puts events there without recording a write; `Calls` and
+`CallsOf` return the writes the engine made, in order; `Err` makes a
+named operation fail so error handling can be exercised without a real
+API. `FreeBusy` is derived from the seeded events, so one setup serves
+both the sync and the scheduling paths.
+
+Combined with `dbtest`, that gives a genuine end-to-end: real rows, real
+SQL, fake Google. `internal/sync/rule_engine_integration_test.go` covers
+the loop guard (including the legacy `calmAxolotl*` keys), etag dedup on
+bidirectional rules, cancellation deleting a mirror the filter would now
+reject, `filter_drop`, and the `rev:` key that keeps forward and reverse
+passes off each other's `event_link` row.
+`scheduler_integration_test.go` covers all three branches of the chunk
+reconcile.
+
+Each of those was checked by breaking the invariant and confirming the
+test fails — a test that passes either way is worse than no test.
+
+### Writing a test that needs a calendar
+
+```go
+pool := dbtest.New(t)
+_, calID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
+
+fake := calfake.New()
+fake.Seed("primary", someEvent)
+
+clientFor := func(context.Context, int64) (calendar.API, error) { return fake, nil }
+```
+
+Nothing outside `internal/calendar` touches `*calendar.Service`, so a
+fake only has to satisfy the ten methods on `calendar.API`.
 
 ## Wiki
 

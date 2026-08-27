@@ -79,6 +79,9 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	if err != nil {
 		return err
 	}
+	if acct == nil {
+		return fmt.Errorf("account %d for calendar %d no longer exists", cal.AccountID, cal.ID)
+	}
 
 	wh, err := hours.Parse(db.EffectiveCalendarHours(cal, acct, db.HoursWorking))
 	if err != nil {
@@ -184,7 +187,7 @@ func roundedDuration(d time.Duration) string {
 
 // unschedule drops every block a task holds and records why, so the user can
 // shorten it, free time up, or move the deadline.
-func (s *Scheduler) unschedule(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
+func (s *Scheduler) unschedule(ctx context.Context, cli calendar.API, cal *db.Calendar,
 	t *db.Task, existing []db.TaskChunk, note string) error {
 	for _, c := range existing {
 		_ = cli.DeleteEvent(ctx, cal.GoogleCalendarID, c.GoogleEventID)
@@ -207,7 +210,7 @@ func (s *Scheduler) unschedule(ctx context.Context, cli *calendar.Client, cal *d
 // moved where the counts line up, extras are deleted, shortfalls are inserted.
 // Reusing events by position keeps the churn on the user's calendar down to
 // the blocks that actually moved.
-func (s *Scheduler) applyChunks(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
+func (s *Scheduler) applyChunks(ctx context.Context, cli calendar.API, cal *db.Calendar,
 	t *db.Task, existing []db.TaskChunk, plan hours.ChunkPlan, tz string) error {
 	unchanged := len(existing) == len(plan.Slots) && len(existing) > 0
 	if unchanged {
@@ -469,6 +472,9 @@ func (s *Scheduler) PlaceHabit(ctx context.Context, habitID int64) error {
 	acct, err := s.accounts.Get(ctx, cal.AccountID)
 	if err != nil {
 		return err
+	}
+	if acct == nil {
+		return fmt.Errorf("account %d for calendar %d no longer exists", cal.AccountID, cal.ID)
 	}
 
 	wh, err := hours.Parse(db.EffectiveCalendarHours(cal, acct, db.HoursKind(h.HoursKind)))

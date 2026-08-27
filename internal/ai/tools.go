@@ -499,19 +499,16 @@ func (t *Toolbox) listEvents(ctx context.Context, input json.RawMessage) (string
 	if _, err := time.Parse(time.RFC3339, p.TimeMax); err != nil {
 		return "", fmt.Errorf("time_max must be RFC3339: %w", err)
 	}
-	call := cli.Service().Events.List(cal.GoogleCalendarID).
-		Context(ctx).SingleEvents(true).
-		TimeMin(p.TimeMin).TimeMax(p.TimeMax).
-		MaxResults(100).OrderBy("startTime")
-	if p.Q != "" {
-		call = call.Q(p.Q)
-	}
-	resp, err := call.Do()
+	timeMin, _ := time.Parse(time.RFC3339, p.TimeMin)
+	timeMax, _ := time.Parse(time.RFC3339, p.TimeMax)
+	events, err := cli.ListEvents(ctx, cal.GoogleCalendarID, calendar.ListEventsOptions{
+		TimeMin: timeMin, TimeMax: timeMax, Query: p.Q, MaxResults: 100,
+	})
 	if err != nil {
 		return "", err
 	}
-	out := make([]eventOut, 0, len(resp.Items))
-	for _, ev := range resp.Items {
+	out := make([]eventOut, 0, len(events))
+	for _, ev := range events {
 		out = append(out, toEventOut(ev, cal.ID))
 	}
 	return marshalToolResult(out)
@@ -538,6 +535,9 @@ func (t *Toolbox) findEvent(ctx context.Context, input json.RawMessage) (string,
 	if p.TimeMax == "" {
 		p.TimeMax = now.AddDate(0, 0, 90).Format(time.RFC3339)
 	}
+	timeMin, _ := time.Parse(time.RFC3339, p.TimeMin)
+	timeMax, _ := time.Parse(time.RFC3339, p.TimeMax)
+
 	cals, err := t.visibleCalendars(ctx)
 	if err != nil {
 		return "", err
@@ -548,14 +548,13 @@ func (t *Toolbox) findEvent(ctx context.Context, input json.RawMessage) (string,
 		if err != nil {
 			continue
 		}
-		resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
-			Context(ctx).SingleEvents(true).
-			TimeMin(p.TimeMin).TimeMax(p.TimeMax).
-			Q(p.Query).MaxResults(50).OrderBy("startTime").Do()
+		events, err := cli.ListEvents(ctx, cal.GoogleCalendarID, calendar.ListEventsOptions{
+			TimeMin: timeMin, TimeMax: timeMax, Query: p.Query, MaxResults: 50,
+		})
 		if err != nil {
 			continue
 		}
-		for _, ev := range resp.Items {
+		for _, ev := range events {
 			hits = append(hits, toEventOut(ev, cal.ID))
 		}
 	}

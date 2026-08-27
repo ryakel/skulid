@@ -86,17 +86,15 @@ func (e *BufferEngine) Recompute(ctx context.Context, calendarID int64) error {
 		byKey[b.Key()] = b
 	}
 
-	resp, err := cli.Service().Events.List(cal.GoogleCalendarID).
-		Context(ctx).SingleEvents(true).
-		TimeMin(from.Format(time.RFC3339)).
-		TimeMax(to.Format(time.RFC3339)).
-		MaxResults(250).OrderBy("startTime").Do()
+	events, err := cli.ListEvents(ctx, cal.GoogleCalendarID, calendar.ListEventsOptions{
+		TimeMin: from, TimeMax: to, MaxResults: 250,
+	})
 	if err != nil {
 		return fmt.Errorf("events list: %w", err)
 	}
 
 	seen := map[db.BufferKey]bool{}
-	for _, ev := range resp.Items {
+	for _, ev := range events {
 		for _, want := range planBuffers(ev, bufs) {
 			seen[want.Key] = true
 			if err := e.apply(ctx, cli, cal, want, byKey[want.Key], byKey); err != nil {
@@ -124,7 +122,7 @@ func (e *BufferEngine) Recompute(ctx context.Context, calendarID int64) error {
 }
 
 // apply creates or moves a single buffer event so it matches `want`.
-func (e *BufferEngine) apply(ctx context.Context, cli *calendar.Client, cal *db.Calendar,
+func (e *BufferEngine) apply(ctx context.Context, cli calendar.API, cal *db.Calendar,
 	want plannedBuffer, row db.BufferEvent, byKey map[db.BufferKey]db.BufferEvent) error {
 	body := &gcal.Event{
 		Summary:      want.Summary,

@@ -145,8 +145,10 @@ internal/
   config/                      # env-var loading
   crypto/                      # AES-256-GCM token sealing
   db/                          # pgx repos + scanned struct models
+    dbtest/                    # throwaway Postgres harness for tests
   auth/                        # OAuth, sessions, TOFU, middleware
-  calendar/                    # Google Calendar client + extendedProperties helpers
+  calendar/                    # Google Calendar client (calendar.API) + extendedProperties helpers
+    calfake/                   # in-memory calendar.API for tests
   category/                    # pure event-classification heuristics
   hours/                       # pure WorkingHours + window arithmetic + slot finders
   sync/                        # rule engine + smart-block engine + scheduler (tasks/habits)

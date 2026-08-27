@@ -1,13 +1,13 @@
-package db
+package db_test
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	. "github.com/ryakel/skulid/internal/db"
+	"github.com/ryakel/skulid/internal/db/dbtest"
 )
 
 // The tests in this file exist for one reason: every repo is hand-written SQL
@@ -17,7 +17,7 @@ import (
 // class of mistake fail here instead of in production.
 
 func TestAccountRepoRoundTrip(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
 	r := NewAccountRepo(pool)
 
@@ -48,13 +48,9 @@ func TestAccountRepoRoundTrip(t *testing.T) {
 	if err != nil || bySub == nil || bySub.ID != id {
 		t.Fatalf("GetBySub: %v (got %v)", err, bySub)
 	}
-	// AccountRepo.Get is the one reader that returns pgx.ErrNoRows rather than
-	// the repo convention of (nil, nil) -- GetBySub right beside it does the
-	// convention. Pinned here rather than fixed, because auth/tokensource.go
-	// dereferences the result without a nil check and would panic instead of
-	// erroring. Tracked as SKUL-22.
-	if _, err := r.Get(ctx, id+9999); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("missing account: got err %v, want pgx.ErrNoRows", err)
+	// Both readers follow the repo convention: not found is not an error.
+	if missing, err := r.Get(ctx, id+9999); err != nil || missing != nil {
+		t.Errorf("missing account should be (nil, nil), got (%v, %v)", missing, err)
 	}
 	if missing, err := r.GetBySub(ctx, "no-such-sub"); err != nil || missing != nil {
 		t.Errorf("missing sub should be (nil, nil), got (%v, %v)", missing, err)
@@ -104,10 +100,18 @@ func TestAccountRepoRoundTrip(t *testing.T) {
 }
 
 func TestCalendarRepoRoundTrip(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	accountID, calendarID := seedCalendar(t, pool)
 	r := NewCalendarRepo(pool)
+
+	// Not dbtest.SeedCalendar: that enables the calendar for the convenience
+	// of every other test, and what this one is checking is the state a
+	// calendar arrives in straight out of discovery.
+	accountID, _ := dbtest.SeedCalendar(t, pool, "owner@example.com", "other")
+	calendarID, err := r.Upsert(ctx, accountID, "primary", "Primary", "UTC", "#ff0000")
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
 
 	got, err := r.Get(ctx, calendarID)
 	if err != nil || got == nil {
@@ -147,24 +151,25 @@ func TestCalendarRepoRoundTrip(t *testing.T) {
 		t.Error("re-running discovery must not disable a calendar the owner turned on")
 	}
 
+	// Two calendars on the account now: the seeded one and this test's.
 	byAccount, err := r.ListByAccount(ctx, accountID)
-	if err != nil || len(byAccount) != 1 {
+	if err != nil || len(byAccount) != 2 {
 		t.Fatalf("ListByAccount: %v (got %d)", err, len(byAccount))
 	}
 	enabled, err := r.ListEnabledByAccount(ctx, accountID)
-	if err != nil || len(enabled) != 1 {
+	if err != nil || len(enabled) != 2 {
 		t.Fatalf("ListEnabledByAccount: %v (got %d)", err, len(enabled))
 	}
 	all, err := r.ListAll(ctx)
-	if err != nil || len(all) != 1 {
+	if err != nil || len(all) != 2 {
 		t.Fatalf("ListAll: %v (got %d)", err, len(all))
 	}
 }
 
 func TestSyncRuleRepoRoundTrip(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	_, calendarID := seedCalendar(t, pool)
+	_, calendarID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
 	r := NewSyncRuleRepo(pool)
 
 	id, err := r.Create(ctx, &SyncRule{
@@ -221,9 +226,9 @@ func TestSyncRuleRepoRoundTrip(t *testing.T) {
 }
 
 func TestTaskRepoAndChunksRoundTrip(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	_, calendarID := seedCalendar(t, pool)
+	_, calendarID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
 	tasks := NewTaskRepo(pool)
 	chunks := NewTaskChunkRepo(pool)
 
@@ -323,9 +328,9 @@ func TestTaskRepoAndChunksRoundTrip(t *testing.T) {
 }
 
 func TestBufferEventRepoRoundTrip(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	_, calendarID := seedCalendar(t, pool)
+	_, calendarID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
 	r := NewBufferEventRepo(pool)
 
 	start := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
@@ -390,9 +395,9 @@ func TestBufferEventRepoRoundTrip(t *testing.T) {
 }
 
 func TestManagedWindowRepoExcludesTravel(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	_, calendarID := seedCalendar(t, pool)
+	_, calendarID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
 
 	start := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	buffers := NewBufferEventRepo(pool)
@@ -426,9 +431,9 @@ func TestManagedWindowRepoExcludesTravel(t *testing.T) {
 }
 
 func TestManagedWindowRepoIncludesEveryTaskChunk(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	_, calendarID := seedCalendar(t, pool)
+	_, calendarID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
 
 	id, err := NewTaskRepo(pool).Create(ctx, &Task{
 		Title: "Split task", DurationMinutes: 240, TargetCalendarID: calendarID,
@@ -460,7 +465,7 @@ func TestManagedWindowRepoIncludesEveryTaskChunk(t *testing.T) {
 }
 
 func TestSettingRepoRoundTrip(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
 	r := NewSettingRepo(pool)
 
@@ -512,9 +517,9 @@ func TestSettingRepoRoundTrip(t *testing.T) {
 }
 
 func TestEventLinkRepoForwardAndReverseCoexist(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
-	accountID, calendarID := seedCalendar(t, pool)
+	accountID, calendarID := dbtest.SeedCalendar(t, pool, "owner@example.com", "primary")
 
 	ruleID, err := NewSyncRuleRepo(pool).Create(ctx, &SyncRule{
 		Name: "bidi", SourceCalendarID: calendarID, TargetCalendarID: calendarID,
@@ -583,7 +588,7 @@ func TestEventLinkRepoForwardAndReverseCoexist(t *testing.T) {
 }
 
 func TestAuditRepoRetention(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
 	r := NewAuditRepo(pool)
 
@@ -615,7 +620,7 @@ func TestAuditRepoRetention(t *testing.T) {
 }
 
 func TestCategoryRepoSeedsBuiltIns(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
 	r := NewCategoryRepo(pool)
 
