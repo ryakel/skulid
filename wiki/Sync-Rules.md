@@ -111,9 +111,25 @@ Backfill walks the source calendar from `now - N days` and runs every
 event through the rule engine once. The rule's `backfill_done` flag is
 set when complete, hiding the button.
 
-If you change the rule and want to re-backfill, edit the rule (which
-implicitly resets the flag isn't done automatically — manually clear it
-via SQL if you must, or just change the backfill_days value and re-save).
+### Re-running a backfill
+
+**Editing a rule does not reset `backfill_done`.** Neither does changing
+**Backfill last N days** and saving again — the update statement doesn't
+touch the column. Once a backfill has completed, the button is gone and
+there is currently no way to run it again from the UI.
+
+Until there is (tracked as SKUL-21), the only route is the database:
+
+```bash
+docker compose exec db psql -U skulid -d skulid \
+  -c "update sync_rule set backfill_done = false where id = <rule id>;"
+```
+
+The **Backfill Nd** button reappears on the rules page after that.
+
+Worth knowing before you do: a second pass walks the same history again
+under the rule's *current* configuration, so a filter you have since
+narrowed will delete mirrors that no longer match.
 
 ## Manual sync
 
@@ -141,25 +157,28 @@ See [Operations](Operations#audit-log) for how to use this.
 
 - Source: work calendar
 - Target: personal calendar
-- Direction: one_way
-- Transform: title template = `Busy`, force busy = on, strip attendees = on,
-  strip description = on, visibility = private
+- Direction: `one_way`
+- Visibility mode: **Busy for all** — titles become "Busy", attendees and
+  description are stripped, visibility private
 
 ### "Sync events between two calendars I both edit"
 
-- Direction: bidirectional
-- Primary side: pick whichever you trust more (used to break tie on
-  conflicting concurrent edits — though this is rare)
+- Direction: `bidirectional`
+- Primary side: pick whichever you trust more (breaks the tie on
+  conflicting concurrent edits — rare in practice)
+- Visibility mode: **Details for you and those with access**, so the
+  mirror keeps everything
 
 ### "Only mirror confirmed customer meetings"
 
 - Filter: title regex `^\\[CUST\\]`, attendee any = `cust@example.com`
-- Transform: title template = `{title}` (default), strip description = on
+- Visibility mode: **Details for you, busy for others** — you keep the
+  title and description, attendees are stripped, visibility private
 
 ### "Pull only my morning events"
 
 - Filter: start hour ≥ `6`, start hour < `12`
-- All-day: exclude
+- All-day mode: `skip`
 
 ## Limitations
 
