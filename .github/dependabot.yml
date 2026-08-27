@@ -1,0 +1,50 @@
+# Dependency updates arrive as PRs instead of waiting for someone to remember
+# a manual sweep. Everything is grouped and weekly: this is a single-maintainer
+# repo, and a stream of one-PR-per-module is noise that gets ignored, which is
+# the same outcome as having no automation at all.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor together: these are the ones worth taking without
+      # thought. Majors stay separate so they get read.
+      go-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Covers both stages of the Dockerfile: the golang builder and the
+  # distroless runtime base, where a CVE would otherwise sit unnoticed
+  # because nothing else here ever bumps it.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(docker)"
+
+  # The workflow pins actions by major tag, which silently stops receiving
+  # fixes once an action moves on.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(ci)"
