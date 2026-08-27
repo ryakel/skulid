@@ -14,8 +14,10 @@ import (
 	"github.com/ryakel/skulid/internal/hours"
 )
 
-// ClientFor returns a Google Calendar client for the given account ID.
-type ClientFor func(ctx context.Context, accountID int64) (*calendar.Client, error)
+// ClientFor resolves an account to a Google Calendar API. It returns the
+// interface rather than *calendar.Client so the engines can be driven against
+// a fake.
+type ClientFor func(ctx context.Context, accountID int64) (calendar.API, error)
 
 type Engine struct {
 	rules     *db.SyncRuleRepo

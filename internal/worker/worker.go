@@ -557,7 +557,7 @@ func (w *accountWorker) process(ctx context.Context, j Job) error {
 	return nil
 }
 
-func (w *accountWorker) syncCalendar(ctx context.Context, cli *calendar.Client, cal db.Calendar) error {
+func (w *accountWorker) syncCalendar(ctx context.Context, cli calendar.API, cal db.Calendar) error {
 	if err := w.mgr.tokens.Ensure(ctx, cal.AccountID, cal.ID); err != nil {
 		return err
 	}

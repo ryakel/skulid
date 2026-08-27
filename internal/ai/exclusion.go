@@ -30,7 +30,7 @@ type exclusionChecker interface {
 // so this is the choke point that matters. A failed check denies access --
 // an account we cannot verify is one we must not hand out.
 func guardClientFor(accounts exclusionChecker, inner syncengine.ClientFor) syncengine.ClientFor {
-	return func(ctx context.Context, accountID int64) (*calendar.Client, error) {
+	return func(ctx context.Context, accountID int64) (calendar.API, error) {
 		excluded, err := accounts.IsAIExcluded(ctx, accountID)
 		if err != nil {
 			return nil, fmt.Errorf("checking AI exclusion for account %d: %w", accountID, err)

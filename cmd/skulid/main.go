@@ -107,7 +107,7 @@ func run(log *slog.Logger) error {
 	secure := isHTTPS(cfg.ExternalURL)
 	sessions := auth.NewSessionManager(cfg.SessionSecret, secure)
 
-	clientFor := func(ctx context.Context, accountID int64) (*calendar.Client, error) {
+	clientFor := func(ctx context.Context, accountID int64) (calendar.API, error) {
 		ts := auth.NewAccountTokenSource(oauth, sealer, accounts, accountID)
 		return calendar.New(ctx, ts)
 	}
