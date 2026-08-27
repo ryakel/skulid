@@ -63,10 +63,17 @@ bidirectional rules can ping-pong indefinitely.
 
 ### Tests
 
-The test suite covers pure logic only. Postgres and Google Calendar
-integration tests are deferred (see `wiki/Development.md`). When you
-add new pure helpers, add tests. When you change something covered by
-the suite, update the suite. Run with `go test -race -count=1 ./...`.
+The suite covers pure logic plus Postgres-backed repo tests. The
+Postgres ones skip unless `SKULID_TEST_DATABASE_URL` points at a server
+you don't mind them creating and dropping databases in; CI sets it
+against a service container. Google Calendar is still faked out only by
+absence — driving the rule engine end-to-end is open (see
+`wiki/Development.md`).
+
+When you add new pure helpers, add tests. When you add a column or a
+migration, extend the matching repo round-trip test — that is what
+catches a select list you forgot to update. Run with
+`go test -race -count=1 ./...`.
 
 ## Areas that require care
 
@@ -77,6 +84,11 @@ the suite, update the suite. Run with `go test -race -count=1 ./...`.
    in `-- +goose StatementBegin` / `-- +goose StatementEnd`.
 3. The file is auto-embedded via `migrations/embed.go`.
 4. **Don't edit existing migrations.** Add a new one.
+5. Run it: `SKULID_TEST_DATABASE_URL=... go test ./internal/db/`.
+   `TestMigrationsApplyFromScratch` applies the whole chain and
+   `TestMigrationsAreReversible` takes it all the way down and back up,
+   so a `Down` that doesn't undo its `Up` fails there. Add any new table
+   to the list in the first of those.
 
 ### Touching the worker
 
