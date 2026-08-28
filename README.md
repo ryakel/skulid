@@ -96,7 +96,7 @@ auto-rotated — back up your `ENCRYPTION_KEY` somewhere offline.
 
 ## Stack
 
-Go 1.25 · chi · pgx + Postgres 16 · goose · Google Calendar API v3 ·
+Go 1.26 · chi · pgx + Postgres 16 · goose · Google Calendar API v3 ·
 HTMX + Alpine.js · distroless. See
 [Architecture](https://github.com/ryakel/skulid/wiki/Architecture)
 for the full map.
