@@ -30,6 +30,17 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
+    ignore:
+      # Moving the Go line is a decision, not a bump: it changes the support
+      # window, and the tooling around it lags a new release (a govulncheck
+      # built on an older toolchain cannot parse the //go:build files a new
+      # one's x/net and x/text ship). Patch updates within the pinned line
+      # still come through; 1.26 -> 1.27 is made deliberately, alongside
+      # go.mod and GO_VERSION, so the three never disagree. See SKUL-25.
+      - dependency-name: golang
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
     commit-message:
       prefix: "chore(docker)"
 
