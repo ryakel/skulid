@@ -3,7 +3,7 @@
 # Pin the builder to BUILDPLATFORM so Go cross-compiles natively for the
 # requested target. This avoids QEMU emulation (which slows arm64 builds
 # from ~30s to ~6min on amd64 runners).
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache ca-certificates git
 COPY go.mod go.sum ./
