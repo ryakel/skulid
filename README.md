@@ -1,3 +1,5 @@
+<img src="internal/httpx/static/logo.svg" width="34" align="left" alt="" hspace="12" vspace="2">
+
 # skulid
 
 > Self-hosted, single-user Google Calendar sync — a Reclaim.ai alternative

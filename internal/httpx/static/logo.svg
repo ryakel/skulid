@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 38" width="28" height="38"
+     role="img" aria-label="skulid">
+  <!-- A lowercase s built from calendar modules: 3 columns by 5 rows, module
+       8x6 with 2px gaps, so every edge lands on a whole pixel. The accent
+       module uses #3b82f6, the seeded Focus category colour, so the mark
+       reads as a focus block held open in the grid. -->
+  <g fill="#111111">
+    <rect x="0"  y="0"  width="8" height="6" rx="2"/>
+    <rect x="10" y="0"  width="8" height="6" rx="2"/>
+    <rect x="20" y="0"  width="8" height="6" rx="2"/>
+
+    <rect x="0"  y="8"  width="8" height="6" rx="2"/>
+
+    <rect x="0"  y="16" width="8" height="6" rx="2"/>
+    <rect x="20" y="16" width="8" height="6" rx="2"/>
+
+    <rect x="20" y="24" width="8" height="6" rx="2"/>
+
+    <rect x="0"  y="32" width="8" height="6" rx="2"/>
+    <rect x="10" y="32" width="8" height="6" rx="2"/>
+    <rect x="20" y="32" width="8" height="6" rx="2"/>
+  </g>
+  <rect x="10" y="16" width="8" height="6" rx="2" fill="#3b82f6"/>
+</svg>
