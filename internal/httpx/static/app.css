@@ -118,8 +118,9 @@ aside.sidebar .brand {
 }
 aside.sidebar .brand:hover { text-decoration: none; }
 aside.sidebar .brand .mark {
-  width: 22px; height: 22px; border-radius: var(--radius-md);
-  background: var(--ink);
+  /* 28x38 viewBox, so 16px wide holds the mark's proportions at 22px tall. */
+  width: 16px; height: 22px;
+  background: url("/static/logo.svg") center / contain no-repeat;
 }
 aside.sidebar nav { display: flex; flex-direction: column; padding: .15rem .65rem; gap: 1px; flex: 1; }
 aside.sidebar nav:last-of-type { flex: 0; }
