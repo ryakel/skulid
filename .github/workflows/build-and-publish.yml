@@ -54,7 +54,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.26"
 
 jobs:
   security:

@@ -45,7 +45,7 @@ through it.
 
 | Layer            | Choice                                                |
 | ---------------- | ----------------------------------------------------- |
-| Language         | Go 1.25+                                              |
+| Language         | Go 1.26+                                              |
 | HTTP             | `chi` router + stdlib `html/template`                 |
 | Frontend         | Server-rendered HTML, sprinkles of HTMX and Alpine.js |
 | Database         | Postgres 16 via `pgx/v5` (no ORM)                     |
