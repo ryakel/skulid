@@ -1,47 +1,40 @@
 {{define "body"}}
 <div class="row">
-<h1>Hours</h1>
-<a href="/settings" class="button secondary">← Back to settings</a>
+  <h1>Hours</h1>
+  <a href="/settings" class="button secondary">← Back to settings</a>
 </div>
 
-<p class="muted">Three windows per account. <strong>Working</strong> is when work tasks &amp; meetings can land. <strong>Personal</strong> is when habits like Lunch can land. <strong>Meeting</strong> is the slot you'll let people book external meetings inside. Personal and Meeting both fall back to Working when blank. Each field is comma-separated <code>HH:MM-HH:MM</code> ranges.</p>
+<p class="page-intro">
+  Three windows per account, and the defaults every calendar on that account
+  inherits. Override any of them per calendar from
+  <a href="/accounts">Accounts</a>.
+</p>
 
 {{range .Forms}}
-<form method="post" action="/settings/hours/{{.AccountID}}" class="stack hours-form">
+<form method="post" action="/settings/hours/{{.AccountID}}" class="stack stack-wide">
   <h2>{{.Email}}</h2>
 
-  <label>Time zone (IANA)
-    <input type="text" name="tz" value="{{.TZ}}" placeholder="America/Chicago" required>
+  <label>Time zone
+    {{template "tzselect" dict
+      "Name" "tz"
+      "Current" .TZ
+      "Groups" .Zones
+      "Required" true
+      "InheritLabel" ""}}
   </label>
 
   <fieldset>
-    <legend>Working</legend>
-    {{range $.Days}}
-      <label>{{.Label}}
-        <input type="text" name="working_{{.Key}}" value="{{index $.WorkingDays .Key}}" placeholder="09:00-12:00,13:00-17:00">
-      </label>
-    {{end}}
+    <legend>Availability</legend>
+    <p class="field-help">
+      <strong>Working</strong> is when work tasks and meetings can land.
+      <strong>Personal</strong> is when habits like Lunch can land.
+      <strong>Meeting</strong> is what you'll let other people book into.
+      Personal and Meeting fall back to Working when left empty.
+    </p>
+    {{template "hoursgrid" dict "Days" $.Days "Columns" .Columns}}
   </fieldset>
 
-  <fieldset>
-    <legend>Personal <span class="muted">(blank = same as Working)</span></legend>
-    {{range $.Days}}
-      <label>{{.Label}}
-        <input type="text" name="personal_{{.Key}}" value="{{index $.PersonalDays .Key}}" placeholder="">
-      </label>
-    {{end}}
-  </fieldset>
-
-  <fieldset>
-    <legend>Meeting <span class="muted">(blank = same as Working)</span></legend>
-    {{range $.Days}}
-      <label>{{.Label}}
-        <input type="text" name="meeting_{{.Key}}" value="{{index $.MeetingDays .Key}}" placeholder="">
-      </label>
-    {{end}}
-  </fieldset>
-
-  <div class="row" style="justify-content:flex-start;gap:.5rem">
+  <div class="row form-actions">
     <button type="submit">Save</button>
   </div>
 </form>
