@@ -122,6 +122,22 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 	}
 
 	dur := time.Duration(t.DurationMinutes) * time.Minute
+
+	// A placement that is still legal stays exactly where it is.
+	//
+	// The plan below is anchored to `now`, and ChunkedSlots clamps its first
+	// slot to notBefore -- so whenever the current instant falls inside a
+	// working window, a freshly computed plan differs from the stored blocks
+	// by however long has passed. Reconciling on that comparison alone meant
+	// the 6-hour maintenance tick rewrote the event every time, creeping its
+	// start forward and notifying attendees on each pass. Stability is the
+	// whole point of the reconcile: leave a good placement alone rather than
+	// re-optimize it.
+	if placementHolds(existing, s.placementAvail(wh, loc, existing, from, to), busy, dur, now) &&
+		t.ScheduleNote == "" && t.Status == db.TaskScheduled {
+		return nil
+	}
+
 	plan := hours.ChunkedSlots(avail, busy, dur, s.minChunk(ctx), from, maxTaskChunks)
 	if !plan.Fits {
 		// Placement is all-or-nothing. Booking 6 of 8 hours and calling the
@@ -131,6 +147,70 @@ func (s *Scheduler) PlaceTask(ctx context.Context, taskID int64) error {
 		return s.unschedule(ctx, cli, cal, t, existing, noFitNote(dur, plan.Placeable, t.DueAt, loc))
 	}
 	return s.applyChunks(ctx, cli, cal, t, existing, plan, wh.TimeZone)
+}
+
+// placementAvail expands the working hours across a window wide enough to
+// judge the blocks already on the calendar. The scheduling window starts at
+// `now`, which would cut a block the owner is currently sitting in off at its
+// own start and make it look illegal; measuring from the earliest existing
+// block instead keeps an in-progress block pinned where it is.
+func (s *Scheduler) placementAvail(wh hours.WorkingHours, loc *time.Location,
+	existing []db.TaskChunk, from, to time.Time) []hours.Window {
+	start := from
+	for _, c := range existing {
+		if at := c.StartsAt.In(loc); at.Before(start) {
+			start = at
+		}
+	}
+	return hours.Merge(hours.Expand(wh, start, to, loc))
+}
+
+// placementHolds reports whether the blocks already on the calendar are still
+// a legal placement for a task of `total` length: inside working hours, clear
+// of other busy time, in order, and adding up.
+//
+// A placement whose last block has already finished is stale -- the time came
+// and went without the task being completed, so it needs new room. One that is
+// merely underway is not: it is pinned, because dragging a block the owner is
+// sitting in forward to "now" is the churn this guards against.
+func placementHolds(existing []db.TaskChunk, avail, busy []hours.Window, total time.Duration, now time.Time) bool {
+	if len(existing) == 0 || total <= 0 {
+		return false
+	}
+	if !existing[len(existing)-1].EndsAt.After(now) {
+		return false
+	}
+
+	var sum time.Duration
+	for i, c := range existing {
+		block := hours.Window{Start: c.StartsAt, End: c.EndsAt}
+		if !block.End.After(block.Start) {
+			return false
+		}
+		if i > 0 && block.Start.Before(existing[i-1].EndsAt) {
+			return false
+		}
+		if !withinAny(block, avail) {
+			return false
+		}
+		for _, b := range busy {
+			if hours.Overlap(block, b) {
+				return false
+			}
+		}
+		sum += block.End.Sub(block.Start)
+	}
+	return sum == total
+}
+
+// withinAny reports whether w fits entirely inside one of the windows.
+func withinAny(w hours.Window, windows []hours.Window) bool {
+	for _, o := range windows {
+		if !w.Start.Before(o.Start) && !w.End.After(o.End) {
+			return true
+		}
+	}
+	return false
 }
 
 // maxTaskChunks caps how many pieces one task may be broken into. The minimum
