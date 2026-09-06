@@ -38,16 +38,21 @@ type schedulerFixture struct {
 // exact windows.
 func newSchedulerFixture(t *testing.T) schedulerFixture {
 	t.Helper()
+	// Every day, so a test's window doesn't depend on which day it runs.
+	return newSchedulerFixtureWithHours(t, `{"time_zone":"UTC","days":{
+		"mon":["09:00-17:00"],"tue":["09:00-17:00"],"wed":["09:00-17:00"],
+		"thu":["09:00-17:00"],"fri":["09:00-17:00"],"sat":["09:00-17:00"],
+		"sun":["09:00-17:00"]}}`)
+}
+
+func newSchedulerFixtureWithHours(t *testing.T, hoursJSON string) schedulerFixture {
+	t.Helper()
 	pool := dbtest.New(t)
 	ctx := context.Background()
 
 	accountID, calID := dbtest.SeedCalendar(t, pool, "owner@example.com", taskCalGoogleID)
 
-	// Every day, so a test's window doesn't depend on which day it runs.
-	hours := json.RawMessage(`{"time_zone":"UTC","days":{
-		"mon":["09:00-17:00"],"tue":["09:00-17:00"],"wed":["09:00-17:00"],
-		"thu":["09:00-17:00"],"fri":["09:00-17:00"],"sat":["09:00-17:00"],
-		"sun":["09:00-17:00"]}}`)
+	hours := json.RawMessage(hoursJSON)
 	if err := db.NewAccountRepo(pool).UpdateHours(ctx, accountID, hours, nil, nil); err != nil {
 		t.Fatalf("setting hours: %v", err)
 	}
@@ -112,6 +117,85 @@ func TestPlaceTaskWritesOneBlockThenLeavesItAlone(t *testing.T) {
 	}
 	if writes := f.Fake.Calls(); len(writes) != 0 {
 		t.Fatalf("an unchanged plan must write nothing, got %+v", writes)
+	}
+}
+
+// The reconcile used to compare the stored blocks against a plan recomputed
+// from `now`, and ChunkedSlots clamps its first slot to that instant -- so a
+// task whose window contained the current time was rewritten on every pass,
+// its start creeping forward by however long had elapsed.
+//
+// The fixture above only caught this between 09:00 and 17:00 UTC, which is why
+// it went unnoticed: CI happened to run outside those hours. These hours span
+// the whole day so `now` is always inside the window, whenever the suite runs.
+func TestPlaceTaskDoesNotCreepWhenNowIsInsideTheWindow(t *testing.T) {
+	f := newSchedulerFixtureWithHours(t, `{"time_zone":"UTC","days":{
+		"mon":["00:00-23:59"],"tue":["00:00-23:59"],"wed":["00:00-23:59"],
+		"thu":["00:00-23:59"],"fri":["00:00-23:59"],"sat":["00:00-23:59"],
+		"sun":["00:00-23:59"]}}`)
+	ctx := context.Background()
+	id := f.newTask(t, "Write the report", 60, nil)
+
+	if err := f.Scheduler.PlaceTask(ctx, id); err != nil {
+		t.Fatalf("first placement: %v", err)
+	}
+	before, _ := f.Chunks.ListByTask(ctx, id)
+	if len(before) != 1 {
+		t.Fatalf("want one chunk, got %d", len(before))
+	}
+
+	// Re-place twice: once is enough to catch the rewrite, twice proves the
+	// block is not drifting a little on each pass.
+	for i := range 2 {
+		f.Fake.Reset()
+		if err := f.Scheduler.PlaceTask(ctx, id); err != nil {
+			t.Fatalf("re-placement %d: %v", i, err)
+		}
+		if writes := f.Fake.Calls(); len(writes) != 0 {
+			t.Fatalf("re-placement %d rewrote a still-valid block: %+v", i, writes)
+		}
+	}
+
+	after, _ := f.Chunks.ListByTask(ctx, id)
+	if len(after) != 1 || !after[0].StartsAt.Equal(before[0].StartsAt) {
+		t.Fatalf("block moved from %v to %v", before[0].StartsAt, after[0].StartsAt)
+	}
+}
+
+// A block whose time came and went without the task being completed is stale,
+// and the task still needs room -- so that one does get re-placed.
+func TestPlaceTaskReplacesABlockThatHasAlreadyFinished(t *testing.T) {
+	f := newSchedulerFixtureWithHours(t, `{"time_zone":"UTC","days":{
+		"mon":["00:00-23:59"],"tue":["00:00-23:59"],"wed":["00:00-23:59"],
+		"thu":["00:00-23:59"],"fri":["00:00-23:59"],"sat":["00:00-23:59"],
+		"sun":["00:00-23:59"]}}`)
+	ctx := context.Background()
+	id := f.newTask(t, "Write the report", 60, nil)
+
+	if err := f.Scheduler.PlaceTask(ctx, id); err != nil {
+		t.Fatalf("first placement: %v", err)
+	}
+	chunks, _ := f.Chunks.ListByTask(ctx, id)
+	if len(chunks) != 1 {
+		t.Fatalf("want one chunk, got %d", len(chunks))
+	}
+
+	// Drag the block into the past, as if the slot had come and gone.
+	past := time.Now().UTC().Add(-4 * time.Hour)
+	if err := f.Chunks.UpdateWindow(ctx, chunks[0].ID, past, past.Add(time.Hour)); err != nil {
+		t.Fatalf("aging the chunk: %v", err)
+	}
+
+	f.Fake.Reset()
+	if err := f.Scheduler.PlaceTask(ctx, id); err != nil {
+		t.Fatalf("re-placement: %v", err)
+	}
+	if len(f.Fake.Calls()) == 0 {
+		t.Fatal("a block that already finished must be re-placed, not left in the past")
+	}
+	moved, _ := f.Chunks.ListByTask(ctx, id)
+	if len(moved) != 1 || !moved[0].StartsAt.After(past) {
+		t.Fatalf("want the block moved forward, got %v", moved)
 	}
 }
 
