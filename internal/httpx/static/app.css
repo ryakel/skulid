@@ -614,3 +614,90 @@ body.centered main.card h1 {
 body.centered main.card .muted { font-size: .85rem; }
 body.centered main.card form { margin-top: 1.25rem; }
 body.centered main.card button { width: 100%; padding: .65rem 1rem; font-size: .9rem; }
+
+/* ------------------------------------------------------------------------- *
+ * Setup forms — availability grid, time-zone picker, override toggles
+ * ------------------------------------------------------------------------- */
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.page-intro { color: var(--body); font-size: .9rem; max-width: 62ch; margin: .35rem 0 1.25rem; }
+
+form.stack-wide { max-width: 1000px; }
+form.stack-wide + form.stack-wide { margin-top: 2.5rem; }
+
+/* Help text sits under the control it explains, in normal weight — the label
+   above it is the bold half, so a bold hint would compete with it. */
+.field-help {
+  display: block; font-weight: 400; font-size: .8rem;
+  color: var(--muted); line-height: 1.45; max-width: 70ch;
+}
+fieldset > .field-help { margin: 0 0 .9rem; }
+
+.form-actions { justify-content: flex-start; gap: .5rem; margin-top: .35rem; }
+
+/* Single-value controls stay legible instead of stretching the full width of
+   a form that is wide only because the availability grid needs the room. */
+.tz-select,
+form.stack-wide > label > select,
+form.stack-wide > label > input[type=text],
+form.stack-wide fieldset > label > select,
+form.stack-wide fieldset > label > input[type=number],
+form.stack-wide .toggle-body > label > input[type=number] { max-width: 26rem; }
+
+/* Availability grid ------------------------------------------------------- */
+
+.hours-grid-wrap { overflow-x: auto; }
+
+.hours-grid {
+  width: 100%; border-collapse: collapse; background: none;
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+.hours-grid th, .hours-grid td {
+  padding: .3rem .4rem; border-bottom: none; vertical-align: middle;
+}
+.hours-grid thead th {
+  background: none; text-transform: none; letter-spacing: normal;
+  font-size: .85rem; font-weight: 600; color: var(--ink);
+  padding-bottom: .1rem; vertical-align: bottom;
+}
+.hours-grid tbody tr:hover { background: none; }
+.hours-grid th.hours-day {
+  width: 8rem; font-weight: 500; font-size: .85rem; color: var(--body);
+  white-space: nowrap; text-align: left;
+}
+.hours-quickfill th.hours-day { color: var(--muted); font-size: .78rem; }
+.hours-grid td input[type=text] {
+  width: 100%; min-width: 11rem; font-size: .85rem;
+  font-variant-numeric: tabular-nums;
+}
+/* The inherited value shows through as the placeholder, so it has to read as
+   "this is what you'd get", not as a hint about formatting. */
+.hours-grid td input[type=text]::placeholder { color: var(--muted-soft); font-style: italic; }
+
+.hours-col-help {
+  display: block; font-weight: 400; font-size: .75rem;
+  color: var(--muted); margin-top: .1rem;
+}
+
+.hours-quickfill td { padding-bottom: .7rem; }
+.hours-fill { display: flex; align-items: center; gap: .3rem; }
+.hours-fill input[type=text] {
+  flex: 1 1 auto; min-width: 0; font-size: .8rem; padding: .3rem .5rem;
+}
+.hours-fill button { padding: .3rem .55rem; font-size: .72rem; white-space: nowrap; }
+.hours-fill button.link {
+  background: none; border: none; color: var(--muted); padding: .3rem .25rem;
+}
+.hours-fill button.link:hover { color: var(--ink); background: none; }
+
+.hours-legend { margin: .5rem 0 0; max-width: 70ch; }
+
+/* Override toggles -------------------------------------------------------- */
+
+.toggle-body { display: flex; flex-direction: column; gap: .9rem; }
+.toggle-body.is-inherited { opacity: .45; }
+.toggle-body.is-inherited input { background: var(--surface-soft); cursor: not-allowed; }

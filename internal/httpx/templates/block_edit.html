@@ -1,6 +1,6 @@
 {{define "body"}}
 <h1>{{if .Block.ID}}Edit smart block{{else}}New smart block{{end}}</h1>
-<form method="post" action="{{if .Block.ID}}/blocks/{{.Block.ID}}{{else}}/blocks{{end}}" class="stack">
+<form method="post" action="{{if .Block.ID}}/blocks/{{.Block.ID}}{{else}}/blocks{{end}}" class="stack stack-wide">
   <label>Name <input type="text" name="name" value="{{.Block.Name}}" required></label>
 
   <label>Target calendar (where blocks are written)
@@ -20,12 +20,15 @@
 
   <fieldset>
     <legend>Working hours</legend>
-    <label>Time zone (IANA) <input type="text" name="wh_tz" value="{{.WH.TimeZone}}" placeholder="America/Chicago" required></label>
-    {{range $day := .Days}}
-      <label>{{$day.Label}} (HH:MM-HH:MM, comma separated)
-        <input type="text" name="wh_{{$day.Key}}" value="{{join (index $.WH.Days $day.Key) ","}}" placeholder="09:00-12:00,13:00-17:00">
-      </label>
-    {{end}}
+    <label>Time zone
+      {{template "tzselect" dict
+        "Name" "wh_tz"
+        "Current" .WH.TimeZone
+        "Groups" .Zones
+        "Required" true
+        "InheritLabel" ""}}
+    </label>
+    {{template "hoursgrid" dict "Days" .Days "Columns" .Columns}}
   </fieldset>
 
   <label>Horizon (days) <input type="number" min="1" max="180" name="horizon_days" value="{{.Block.HorizonDays}}"></label>

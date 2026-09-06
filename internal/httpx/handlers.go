@@ -717,6 +717,15 @@ func (s *Server) handleBlockEditPage(w http.ResponseWriter, r *http.Request) {
 			wh.Days[d.Key] = []string{}
 		}
 	}
+	// A block's hours stand alone — there is nothing above them to inherit
+	// from, so every empty day really does mean "never".
+	whColumns := []hoursColumn{{
+		Key:       "wh",
+		Title:     "Available",
+		Help:      "Blocks are only written inside these windows.",
+		Values:    daysToCSV(wh),
+		Inherited: map[string]string{},
+	}}
 	cals, _, err := s.calendarOptions(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -729,6 +738,8 @@ func (s *Server) handleBlockEditPage(w http.ResponseWriter, r *http.Request) {
 	data := s.pageData(r, "Smart block")
 	data["Block"] = block
 	data["WH"] = wh
+	data["Columns"] = whColumns
+	data["Zones"] = hours.ZoneGroupsWith(wh.TimeZone)
 	data["Calendars"] = cals
 	data["SourceSet"] = srcSet
 	data["Days"] = weekDays
@@ -779,17 +790,22 @@ func (s *Server) handleBlockSave(w http.ResponseWriter, r *http.Request) {
 	block.TitleTemplate = strOr(strings.TrimSpace(r.FormValue("title_template")), "Focus")
 	block.Enabled = r.FormValue("enabled") != ""
 
-	wh := hours.WorkingHours{
-		TimeZone: strOr(strings.TrimSpace(r.FormValue("wh_tz")), "UTC"),
-		Days:     map[string][]string{},
+	tz := strOr(strings.TrimSpace(r.FormValue("wh_tz")), "UTC")
+	if _, err := time.LoadLocation(tz); err != nil {
+		http.Error(w, fmt.Sprintf("%q is not a time zone this server can load", tz), http.StatusBadRequest)
+		return
 	}
+	wh := hours.WorkingHours{TimeZone: tz, Days: map[string][]string{}}
 	for _, d := range weekDays {
-		raw := strings.TrimSpace(r.FormValue("wh_" + d.Key))
-		ranges := []string{}
-		for _, p := range strings.Split(raw, ",") {
-			if p = strings.TrimSpace(p); p != "" {
-				ranges = append(ranges, p)
-			}
+		ranges, bad := hours.NormalizeRanges(strings.TrimSpace(r.FormValue("wh_" + d.Key)))
+		if bad != "" {
+			http.Error(w, fmt.Sprintf(
+				"%s: %q is not a time range — write it as HH:MM-HH:MM, e.g. 09:00-17:00", d.Label, bad),
+				http.StatusBadRequest)
+			return
+		}
+		if ranges == nil {
+			ranges = []string{}
 		}
 		wh.Days[d.Key] = ranges
 	}

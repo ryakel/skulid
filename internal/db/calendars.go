@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -151,7 +152,73 @@ func (r *CalendarRepo) ListEnabledByAccount(ctx context.Context, accountID int64
 // EffectiveCalendarHours implements the override chain: per-calendar override,
 // then per-account default (with personal/meeting falling back to working
 // inside the account itself).
+//
+// The winning blob's time zone is resolved here too. Per-calendar hours saved
+// without an explicit zone inherit the one Google reports for the calendar, so
+// a calendar that moves zones in Google takes its availability with it rather
+// than leaving behind a snapshot the owner has to remember to re-pick. An
+// explicit zone on the blob always wins — that is what an override is for.
 func EffectiveCalendarHours(cal *Calendar, acct *Account, kind HoursKind) json.RawMessage {
+	raw := pickCalendarHours(cal, acct, kind)
+	if zoneOf(raw) != "" {
+		return raw
+	}
+	return withZone(raw, CalendarZone(cal, acct))
+}
+
+// CalendarZone is the zone a calendar's wall-clock times are written in: what
+// Google reports for the calendar, then the account's own, then UTC.
+func CalendarZone(cal *Calendar, acct *Account) string {
+	if cal != nil {
+		if z := strings.TrimSpace(cal.TimeZone); z != "" {
+			return z
+		}
+	}
+	if acct != nil {
+		if z := zoneOf(acct.WorkingHours); z != "" {
+			return z
+		}
+	}
+	return "UTC"
+}
+
+// zoneOf reads just the time_zone out of an hours blob. Unlike hours.Parse it
+// does not substitute a default, because "unset" is the signal that the zone
+// should be inherited and a default would erase it.
+func zoneOf(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var probe struct {
+		TimeZone string `json:"time_zone"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(probe.TimeZone)
+}
+
+// withZone stamps zone onto an hours blob that has none.
+func withZone(raw json.RawMessage, zone string) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	var wh struct {
+		TimeZone string              `json:"time_zone"`
+		Days     map[string][]string `json:"days"`
+	}
+	if err := json.Unmarshal(raw, &wh); err != nil {
+		return raw
+	}
+	wh.TimeZone = zone
+	out, err := json.Marshal(wh)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+func pickCalendarHours(cal *Calendar, acct *Account, kind HoursKind) json.RawMessage {
 	if cal != nil {
 		switch kind {
 		case HoursPersonal:

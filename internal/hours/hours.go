@@ -5,8 +5,8 @@ package hours
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -110,21 +110,19 @@ func DayKey(d time.Weekday) string {
 // ParseRange turns "HH:MM-HH:MM" into a concrete window on the given day in
 // loc. Returns ok=false on any parse error, range inversion, or out-of-bounds
 // hour/minute.
+//
+// It accepts exactly what NormalizeRange accepts, so a range the setup form
+// took is a range the engine can expand — the two must never drift apart.
 func ParseRange(r string, day time.Time, loc *time.Location) (time.Time, time.Time, bool) {
-	var sh, sm, eh, em int
-	var trailing rune
-	n, _ := fmt.Sscanf(r, "%d:%d-%d:%d%c", &sh, &sm, &eh, &em, &trailing)
-	if n != 4 {
+	norm, ok := NormalizeRange(r)
+	if !ok {
 		return time.Time{}, time.Time{}, false
 	}
-	if sh < 0 || sh > 23 || eh < 0 || eh > 23 || sm < 0 || sm > 59 || em < 0 || em > 59 {
-		return time.Time{}, time.Time{}, false
-	}
+	startHM, endHM, _ := strings.Cut(norm, "-")
+	sh, sm, _ := parseHM(startHM)
+	eh, em, _ := parseHM(endHM)
 	start := time.Date(day.Year(), day.Month(), day.Day(), sh, sm, 0, 0, loc)
 	end := time.Date(day.Year(), day.Month(), day.Day(), eh, em, 0, 0, loc)
-	if !end.After(start) {
-		return time.Time{}, time.Time{}, false
-	}
 	return start, end, true
 }
 

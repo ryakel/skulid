@@ -1,83 +1,91 @@
 {{define "body"}}
+{{$f := .Form}}
 <div class="row">
   <div>
-    <h1 style="margin:0">{{.Form.Calendar.Summary}}</h1>
-    <div class="muted">{{.Form.AccountEmail}} · <code>{{.Form.Calendar.GoogleCalendarID}}</code></div>
+    <h1 style="margin:0">{{$f.Calendar.Summary}}</h1>
+    <div class="muted">{{$f.AccountEmail}} · <code>{{$f.Calendar.GoogleCalendarID}}</code></div>
   </div>
   <a href="/accounts" class="button secondary">← Back to accounts</a>
 </div>
 
-<p class="muted">Per-calendar overrides for hours, buffers, and the default
-category. Leave any field blank to fall back to the account-level (hours) or
-global (buffers) value. The categorizer pin only kicks in when the heuristic
-would otherwise choose <code>other</code>.</p>
+<p class="page-intro">
+  Everything here is an <strong>override</strong>. Leave a field alone and this
+  calendar follows
+  <a href="/settings/hours">{{$f.AccountEmail}}</a> for hours and the
+  <a href="/settings/buffers">global settings</a> for buffers.
+</p>
 
-<form method="post" action="/calendars/{{.Form.Calendar.ID}}" class="stack">
+<form method="post" action="/calendars/{{$f.Calendar.ID}}" class="stack stack-wide">
+
   <fieldset>
-    <legend>Default category</legend>
-    <label>Falls back to the auto-categorizer when blank
+    <legend>Category</legend>
+    <label>Default category
       <select name="default_category_id">
-        <option value="">(auto)</option>
-        {{range .Form.Categories}}
-          <option value="{{.ID}}" {{if and $.Form.Calendar.DefaultCategoryID (eq .ID (deref $.Form.Calendar.DefaultCategoryID))}}selected{{end}}>{{.Name}}</option>
+        <option value="">Let the categorizer decide</option>
+        {{range $f.Categories}}
+          <option value="{{.ID}}"{{if eq (int64 .ID) $f.CategoryID}} selected{{end}}>{{.Name}}</option>
         {{end}}
       </select>
+      <span class="field-help">Only applies when the heuristic would otherwise
+        land on <code>other</code>. It never overrules a confident guess.</span>
     </label>
   </fieldset>
 
   <fieldset>
-    <legend>Hours <span class="muted">(blank rows fall back to the account)</span></legend>
-
-    <label>Time zone (IANA)
-      <input type="text" name="tz" value="{{.Form.TZ}}" placeholder="America/Chicago">
+    <legend>Time zone</legend>
+    <label>The zone the times below are read in
+      {{template "tzselect" dict
+        "Name" "tz"
+        "Current" $f.TZ
+        "Groups" $f.Zones
+        "Required" false
+        "InheritLabel" (printf "Use the calendar's own zone — %s" $f.InheritedTZ)}}
+      <span class="field-help">Google reports this calendar as
+        <code>{{$f.InheritedTZ}}</code>, and that is what skulid uses unless you
+        pick something else here. Inheriting means a calendar that moves zones
+        in Google brings its availability with it.</span>
     </label>
+  </fieldset>
 
-    <fieldset>
-      <legend>Working</legend>
-      {{range $.Days}}
-        <label>{{.Label}}
-          <input type="text" name="working_{{.Key}}" value="{{index $.Form.WorkingDays .Key}}" placeholder="">
-        </label>
-      {{end}}
-    </fieldset>
-
-    <fieldset>
-      <legend>Personal</legend>
-      {{range $.Days}}
-        <label>{{.Label}}
-          <input type="text" name="personal_{{.Key}}" value="{{index $.Form.PersonalDays .Key}}" placeholder="">
-        </label>
-      {{end}}
-    </fieldset>
-
-    <fieldset>
-      <legend>Meeting</legend>
-      {{range $.Days}}
-        <label>{{.Label}}
-          <input type="text" name="meeting_{{.Key}}" value="{{index $.Form.MeetingDays .Key}}" placeholder="">
-        </label>
-      {{end}}
-    </fieldset>
+  <fieldset>
+    <legend>Availability</legend>
+    <p class="field-help">
+      <strong>Working</strong> is when work tasks and meetings can land.
+      <strong>Personal</strong> is when habits like Lunch can land.
+      <strong>Meeting</strong> is what you'll let other people book into.
+      On this page Personal and Meeting fall back to this calendar's Working
+      column first, and only then to the account.
+    </p>
+    {{template "hoursgrid" dict "Days" .Days "Columns" $f.Columns}}
   </fieldset>
 
   <fieldset>
     <legend>Buffers</legend>
     <label class="checkbox">
-      <input type="checkbox" name="use_calendar_buffers" {{if .Form.BuffersFromCal}}checked{{end}}>
-      Override the global buffers for this calendar
+      <input type="checkbox" name="use_calendar_buffers" data-toggle="cal-buffers"
+             {{if $f.BuffersFromCal}}checked{{end}}>
+      Give this calendar its own buffers
     </label>
-    <label>Task &amp; Habit breaks (minutes)
-      <input type="number" min="0" max="240" name="task_habit_break_minutes" value="{{.Form.Buffers.TaskHabitBreakMinutes}}">
-    </label>
-    <label>Decompression after meetings (minutes)
-      <input type="number" min="0" max="240" name="decompression_minutes" value="{{.Form.Buffers.DecompressionMinutes}}">
-    </label>
-    <label>Travel time (minutes) <span class="muted">(before &amp; after located meetings)</span>
-      <input type="number" min="0" max="240" name="travel_minutes" value="{{.Form.Buffers.TravelMinutes}}">
-    </label>
+    <p class="field-help" id="cal-buffers-inherit">
+      Unticked, this calendar uses the global values:
+      {{$f.GlobalBuffers.TaskHabitBreakMinutes}} / {{$f.GlobalBuffers.DecompressionMinutes}} /
+      {{$f.GlobalBuffers.TravelMinutes}} minutes.
+    </p>
+    <div class="toggle-body" id="cal-buffers">
+      <label>Task &amp; habit breaks (minutes)
+        <input type="number" min="0" max="240" name="task_habit_break_minutes" value="{{$f.Buffers.TaskHabitBreakMinutes}}">
+      </label>
+      <label>Decompression after meetings (minutes)
+        <input type="number" min="0" max="240" name="decompression_minutes" value="{{$f.Buffers.DecompressionMinutes}}">
+      </label>
+      <label>Travel time (minutes)
+        <input type="number" min="0" max="240" name="travel_minutes" value="{{$f.Buffers.TravelMinutes}}">
+        <span class="field-help">Held before and after meetings that have a location.</span>
+      </label>
+    </div>
   </fieldset>
 
-  <div class="row" style="justify-content:flex-start;gap:.5rem">
+  <div class="row form-actions">
     <button type="submit">Save</button>
     <a href="/accounts" class="button secondary">Cancel</a>
   </div>

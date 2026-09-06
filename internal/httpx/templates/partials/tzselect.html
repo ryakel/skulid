@@ -1,0 +1,12 @@
+{{define "tzselect"}}
+<select name="{{.Name}}" class="tz-select"{{if .Required}} required{{end}}>
+  {{if .InheritLabel}}<option value=""{{if eq .Current ""}} selected{{end}}>{{.InheritLabel}}</option>{{end}}
+  {{range .Groups}}
+    <optgroup label="{{.Region}}">
+      {{range .Zones}}
+        <option value="{{.Name}}"{{if eq .Name $.Current}} selected{{end}}>{{.Display}}</option>
+      {{end}}
+    </optgroup>
+  {{end}}
+</select>
+{{end}}
