@@ -10,11 +10,14 @@ import (
 	"time"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html templates/partials/*.html
 var templateFS embed.FS
 
 // Renderer parses each page template against the shared layout independently
 // so the per-page {{define "body"}} blocks don't clash in a single namespace.
+// Everything under templates/partials is parsed into every page, so a widget
+// several pages need — the time-zone picker, the availability grid — is
+// defined once instead of pasted around.
 type Renderer struct {
 	pages map[string]*template.Template
 }
@@ -74,6 +77,10 @@ func NewRenderer() (*Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
+	partialPaths, err := fs.Glob(templateFS, "templates/partials/*.html")
+	if err != nil {
+		return nil, err
+	}
 
 	r := &Renderer{pages: map[string]*template.Template{}}
 	if err := fs.WalkDir(templateFS, "templates", func(path string, d fs.DirEntry, err error) error {
@@ -81,7 +88,7 @@ func NewRenderer() (*Renderer, error) {
 			return err
 		}
 		name := strings.TrimPrefix(path, "templates/")
-		if name == "layout.html" {
+		if name == "layout.html" || strings.HasPrefix(name, "partials/") {
 			return nil
 		}
 		raw, err := templateFS.ReadFile(path)
@@ -91,6 +98,15 @@ func NewRenderer() (*Renderer, error) {
 		t, err := template.New("layout").Funcs(funcs).Parse(string(layout))
 		if err != nil {
 			return err
+		}
+		for _, p := range partialPaths {
+			partial, err := templateFS.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			if _, err := t.Parse(string(partial)); err != nil {
+				return fmt.Errorf("parse %s: %w", p, err)
+			}
 		}
 		if _, err := t.Parse(string(raw)); err != nil {
 			return fmt.Errorf("parse %s: %w", name, err)

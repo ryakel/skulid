@@ -1,0 +1,52 @@
+{{define "hoursgrid"}}
+<div class="hours-grid-wrap">
+  <table class="hours-grid">
+    <thead>
+      <tr>
+        <th class="hours-day"><span class="visually-hidden">Day</span></th>
+        {{range .Columns}}
+          <th scope="col">{{.Title}}<span class="hours-col-help">{{.Help}}</span></th>
+        {{end}}
+      </tr>
+      <tr class="hours-quickfill">
+        <th scope="row" class="hours-day">Quick fill</th>
+        {{range .Columns}}
+          <td>
+            <div class="hours-fill" data-hours-fill="{{.Key}}">
+              <input type="text" data-fill-value placeholder="09:00-17:00"
+                     aria-label="Range to apply across {{.Title}}"
+                     autocomplete="off" spellcheck="false">
+              <button type="button" class="secondary" data-fill-apply="weekdays">Mon–Fri</button>
+              <button type="button" class="secondary" data-fill-apply="all">All 7</button>
+              <button type="button" class="link" data-fill-apply="clear">Clear</button>
+            </div>
+          </td>
+        {{end}}
+      </tr>
+    </thead>
+    <tbody>
+      {{$columns := .Columns}}
+      {{range $day := .Days}}
+        <tr>
+          <th scope="row" class="hours-day">{{$day.Label}}</th>
+          {{range $col := $columns}}
+            {{$inherited := index $col.Inherited $day.Key}}
+            <td>
+              <input type="text" name="{{$col.Key}}_{{$day.Key}}"
+                     value="{{index $col.Values $day.Key}}"
+                     placeholder="{{if $inherited}}{{$inherited}}{{else}}unavailable{{end}}"
+                     aria-label="{{$col.Title}} hours on {{$day.Label}}"
+                     autocomplete="off" spellcheck="false">
+            </td>
+          {{end}}
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+<p class="hours-legend muted">
+  Each box takes comma-separated <code>HH:MM-HH:MM</code> ranges, e.g.
+  <code>09:00-12:00,13:00-17:00</code>. Grey text is what an empty box
+  inherits — clear a box to go back to inheriting it.
+</p>
+{{end}}
