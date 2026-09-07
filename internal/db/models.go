@@ -52,6 +52,11 @@ type Calendar struct {
 	// new sync rule / smart block / task / habit selectors. Existing references
 	// degrade gracefully — the engines see them as "no busy time".
 	Enabled bool
+	// Hidden collapses the calendar out of the Accounts list so its controls
+	// can't be hit by accident. Cosmetic only, and independent of Enabled: a
+	// hidden calendar that is enabled still syncs. Nothing outside the
+	// Accounts page reads it.
+	Hidden bool
 }
 
 type SyncToken struct {

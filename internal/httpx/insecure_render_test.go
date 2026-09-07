@@ -26,12 +26,11 @@ func TestRenderInsecureConfigBanner(t *testing.T) {
 
 	pages := map[string]map[string]any{
 		"accounts": {
-			"Title":              "Accounts",
-			"Features":           map[string]bool{"Assistant": false},
-			"Version":            "test",
-			"Accounts":           []db.Account{{ID: 1, Email: "me@example.com", CreatedAt: time.Now()}},
-			"CalendarsByAccount": map[int64][]db.Calendar{},
-			"InsecureFindings":   findings,
+			"Title":            "Accounts",
+			"Features":         map[string]bool{"Assistant": false},
+			"Version":          "test",
+			"Rows":             accountRowsFor([]db.Account{{ID: 1, Email: "me@example.com", CreatedAt: time.Now()}}...),
+			"InsecureFindings": findings,
 		},
 		"login": {
 			"Claimed":          false,
@@ -70,11 +69,10 @@ func TestRenderNoInsecureBannerWhenConfigIsSound(t *testing.T) {
 
 	pages := map[string]map[string]any{
 		"accounts": {
-			"Title":              "Accounts",
-			"Features":           map[string]bool{"Assistant": false},
-			"Version":            "test",
-			"Accounts":           []db.Account{},
-			"CalendarsByAccount": map[int64][]db.Calendar{},
+			"Title":    "Accounts",
+			"Features": map[string]bool{"Assistant": false},
+			"Version":  "test",
+			"Rows":     accountRowsFor([]db.Account{}...),
 		},
 		"login": {"Claimed": false, "Version": "test"},
 	}

@@ -182,6 +182,20 @@ don't own outright — see
 below. Re-run discovery anytime with **Refresh calendars**; it never
 disturbs what you have already enabled.
 
+#### Hiding the calendars you never touch
+
+An account often lists calendars you will never manage — holiday feeds, a
+colleague's shared calendar, a legacy sync. **Hide** collapses one of these
+into a **Hidden** section on that account, so its **Enable** and **Settings**
+controls aren't sitting there waiting to be misclicked.
+
+Hiding is cosmetic and completely separate from enabling. A hidden calendar
+that is enabled keeps syncing, keeps its push channel, and still appears in
+rule, smart-block, task and habit selectors; it is marked **still syncing** in
+the hidden list so this is never a surprise. The account's calendar count still
+counts hidden ones, and **Unhide** puts one back. To actually stop a calendar
+syncing, disable it.
+
 ### Connecting an account you don't own
 
 Connecting an employer's Google Workspace account is a different

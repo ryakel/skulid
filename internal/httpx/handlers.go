@@ -266,18 +266,46 @@ func (s *Server) handleAccountsPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	byAcct := map[int64][]db.Calendar{}
+	rows := make([]accountRow, 0, len(accounts))
 	for _, a := range accounts {
 		cs, _ := s.Calendars.ListByAccount(ctx, a.ID)
-		byAcct[a.ID] = cs
+		rows = append(rows, newAccountRow(a, cs))
 	}
 	data := s.pageData(r, "Accounts")
-	data["Accounts"] = accounts
-	data["CalendarsByAccount"] = byAcct
+	data["Rows"] = rows
 	if msg := accountsPageError(r.URL.Query().Get("error")); msg != "" {
 		data["Error"] = msg
 	}
 	s.render(w, "accounts", data)
+}
+
+// accountRow is one account's block on the Accounts page: the account itself
+// plus its calendars already split into the ones on show and the ones the
+// owner has collapsed away.
+//
+// It is one value rather than several parallel maps keyed by account ID
+// because the template would otherwise 500 the whole page on a caller that
+// filled in one map and forgot another.
+type accountRow struct {
+	Account db.Account
+	Total   int
+	Shown   []db.Calendar
+	Hidden  []db.Calendar
+}
+
+// newAccountRow splits a calendar list for display. Total counts every
+// calendar on the account, hidden ones included: hiding is a display choice
+// and the account's own count should still say what it really has.
+func newAccountRow(a db.Account, cals []db.Calendar) accountRow {
+	row := accountRow{Account: a, Total: len(cals)}
+	for _, c := range cals {
+		if c.Hidden {
+			row.Hidden = append(row.Hidden, c)
+		} else {
+			row.Shown = append(row.Shown, c)
+		}
+	}
+	return row
 }
 
 // accountsPageError turns an ?error= code into something worth reading.
