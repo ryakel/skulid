@@ -17,7 +17,7 @@ func NewCalendarRepo(pool *pgxpool.Pool) *CalendarRepo { return &CalendarRepo{po
 
 const calendarSelectCols = `id, account_id, google_calendar_id, summary, time_zone, color,
 	last_synced_at, default_category_id,
-	working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb, buffers, enabled`
+	working_hours_jsonb, personal_hours_jsonb, meeting_hours_jsonb, buffers, enabled, hidden`
 
 // Upsert records a calendar found during discovery. New rows arrive
 // disabled: connecting an account should not register push channels on
@@ -113,7 +113,7 @@ func scanCalendar(row rowScanner) (*Calendar, error) {
 	var buffers *string
 	if err := row.Scan(&c.ID, &c.AccountID, &c.GoogleCalendarID, &c.Summary, &c.TimeZone, &c.Color,
 		&c.LastSyncedAt, &c.DefaultCategoryID,
-		&c.WorkingHours, &c.PersonalHours, &c.MeetingHours, &buffers, &c.Enabled); err != nil {
+		&c.WorkingHours, &c.PersonalHours, &c.MeetingHours, &buffers, &c.Enabled, &c.Hidden); err != nil {
 		return nil, err
 	}
 	if buffers != nil {
@@ -126,6 +126,15 @@ func scanCalendar(row rowScanner) (*Calendar, error) {
 // renewal on the next pass; enabling lets the next polling tick pick it up.
 func (r *CalendarRepo) SetEnabled(ctx context.Context, id int64, enabled bool) error {
 	_, err := r.pool.Exec(ctx, `UPDATE calendar SET enabled = $2 WHERE id = $1`, id, enabled)
+	return err
+}
+
+// SetHidden collapses a calendar out of the Accounts list, or brings it back.
+// Purely cosmetic: nothing in the sync engine, the worker, or any selector
+// reads this. A hidden calendar that is enabled keeps syncing exactly as it
+// did -- hiding is about not misclicking a row, not about turning it off.
+func (r *CalendarRepo) SetHidden(ctx context.Context, id int64, hidden bool) error {
+	_, err := r.pool.Exec(ctx, `UPDATE calendar SET hidden = $2 WHERE id = $1`, id, hidden)
 	return err
 }
 

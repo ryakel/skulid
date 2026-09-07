@@ -139,6 +139,29 @@ func TestCalendarRepoRoundTrip(t *testing.T) {
 		t.Errorf("buffers = %q, want \"15,20,25\"", got.Buffers)
 	}
 
+	// Hidden is cosmetic and independent of enabled: hiding a calendar must
+	// not switch it off, or a display choice would silently stop a sync.
+	if got.Hidden {
+		t.Error("a calendar should arrive visible")
+	}
+	if err := r.SetHidden(ctx, calendarID, true); err != nil {
+		t.Fatalf("SetHidden: %v", err)
+	}
+	got, _ = r.Get(ctx, calendarID)
+	if !got.Hidden {
+		t.Error("hidden did not round trip")
+	}
+	if !got.Enabled {
+		t.Error("hiding a calendar must not disable it")
+	}
+	if err := r.SetHidden(ctx, calendarID, false); err != nil {
+		t.Fatalf("SetHidden back: %v", err)
+	}
+	got, _ = r.Get(ctx, calendarID)
+	if got.Hidden {
+		t.Error("unhiding did not round trip")
+	}
+
 	// Re-running discovery updates the label but must leave `enabled` alone.
 	if _, err := r.Upsert(ctx, accountID, "primary", "Renamed", "UTC", "#00ff00"); err != nil {
 		t.Fatalf("re-upsert: %v", err)
