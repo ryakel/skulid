@@ -29,12 +29,11 @@ func TestRenderAccountNeedingReauth(t *testing.T) {
 	}
 
 	data := map[string]any{
-		"Title":              "Accounts",
-		"Features":           map[string]bool{"Assistant": false},
-		"Version":            "test",
-		"Accounts":           []db.Account{broken},
-		"CalendarsByAccount": map[int64][]db.Calendar{},
-		"ReauthAccounts":     []db.Account{broken},
+		"Title":          "Accounts",
+		"Features":       map[string]bool{"Assistant": false},
+		"Version":        "test",
+		"Rows":           accountRowsFor([]db.Account{broken}...),
+		"ReauthAccounts": []db.Account{broken},
 	}
 
 	var buf bytes.Buffer
@@ -66,11 +65,10 @@ func TestRenderHealthyAccountHasNoReauthNoise(t *testing.T) {
 
 	healthy := db.Account{ID: 3, Email: "ok@example.com", CreatedAt: time.Now()}
 	data := map[string]any{
-		"Title":              "Accounts",
-		"Features":           map[string]bool{"Assistant": false},
-		"Version":            "test",
-		"Accounts":           []db.Account{healthy},
-		"CalendarsByAccount": map[int64][]db.Calendar{},
+		"Title":    "Accounts",
+		"Features": map[string]bool{"Assistant": false},
+		"Version":  "test",
+		"Rows":     accountRowsFor([]db.Account{healthy}...),
 	}
 
 	var buf bytes.Buffer
@@ -100,11 +98,10 @@ func TestRenderAIExclusionToggle(t *testing.T) {
 
 	render := func(assistant bool) string {
 		data := map[string]any{
-			"Title":              "Accounts",
-			"Features":           map[string]bool{"Assistant": assistant},
-			"Version":            "test",
-			"Accounts":           []db.Account{personal, work},
-			"CalendarsByAccount": map[int64][]db.Calendar{},
+			"Title":    "Accounts",
+			"Features": map[string]bool{"Assistant": assistant},
+			"Version":  "test",
+			"Rows":     accountRowsFor([]db.Account{personal, work}...),
 		}
 		var buf bytes.Buffer
 		if err := r.Render(&buf, "accounts", data); err != nil {

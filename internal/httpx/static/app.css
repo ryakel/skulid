@@ -701,3 +701,44 @@ form.stack-wide .toggle-body > label > input[type=number] { max-width: 26rem; }
 .toggle-body { display: flex; flex-direction: column; gap: .9rem; }
 .toggle-body.is-inherited { opacity: .45; }
 .toggle-body.is-inherited input { background: var(--surface-soft); cursor: not-allowed; }
+
+/* ------------------------------------------------------------------------- *
+ * Accounts — one card per account, each carrying its own column header
+ * ------------------------------------------------------------------------- */
+
+/* The page used to be a single table with one header at the very top, which
+   was off-screen by the second account. Each account is its own table now so
+   the columns are legible wherever you are on the page. */
+.account-card { margin: 0 0 1.75rem; }
+.account-card .account-table { margin: 0; }
+
+/* Hidden calendars ------------------------------------------------------- */
+
+.hidden-cals { margin: .5rem 0 .15rem; border-top: 1px solid var(--hairline); padding-top: .5rem; }
+.hidden-cals > summary {
+  cursor: pointer; font-size: .8rem; font-weight: 500; color: var(--muted);
+  list-style: none; display: inline-flex; align-items: center; gap: .35rem;
+  padding: .2rem .5rem; border-radius: var(--radius-pill);
+}
+.hidden-cals > summary::-webkit-details-marker { display: none; }
+.hidden-cals > summary::before { content: "▸"; font-size: .7em; }
+.hidden-cals[open] > summary::before { content: "▾"; }
+.hidden-cals > summary:hover { background: var(--surface-soft); color: var(--ink); }
+.hidden-cals > .field-help { margin: .45rem 0 .1rem; }
+/* Dimmed as a set, so the eye skips the whole block rather than reading it
+   row by row — that is the entire point of hiding them. */
+.hidden-cals .calendars { opacity: .7; }
+.hidden-cals .calendars:hover { opacity: 1; }
+
+/* A Google calendar ID can be a 64-character hash. Left to wrap, it pushed the
+   row's controls onto a second line and left the list ragged — the opposite of
+   what hiding the noisy rows is for. One line each, ID truncated, full value on
+   hover. */
+ul.calendars li.cal-row { flex-wrap: nowrap; }
+.cal-row > strong { flex: 0 0 auto; }
+.cal-row .cat-pill { flex: 0 0 auto; }
+.cal-row-meta {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cal-row .cal-row-actions { flex: 0 0 auto; }

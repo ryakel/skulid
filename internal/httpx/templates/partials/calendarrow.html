@@ -1,0 +1,31 @@
+{{define "calendarrow"}}
+{{$c := .Cal}}
+<li class="cal-row {{if not $c.Enabled}}cal-row-disabled{{end}}">
+  <span class="dot" style="background:{{$c.Color}}"></span>
+  <strong>{{$c.Summary}}</strong>
+  <span class="muted cal-row-meta" title="{{$c.TimeZone}} · {{$c.GoogleCalendarID}}">{{$c.TimeZone}} · {{$c.GoogleCalendarID}}</span>
+  {{if not $c.Enabled}}<span class="cat-pill" style="background:#9ca3af;margin-left:.5rem">disabled</span>{{end}}
+  {{if and .Hidden $c.Enabled}}<span class="cat-pill" style="background:#10b981;margin-left:.5rem">still syncing</span>{{end}}
+  <span class="cal-row-actions">
+    <form method="post" action="/calendars/{{$c.ID}}/enabled" style="display:inline">
+      {{if $c.Enabled}}
+        <input type="hidden" name="enabled" value="0">
+        <button type="submit" class="secondary">Disable</button>
+      {{else}}
+        <input type="hidden" name="enabled" value="1">
+        <button type="submit">Enable</button>
+      {{end}}
+    </form>
+    <form method="post" action="/calendars/{{$c.ID}}/hidden" style="display:inline">
+      {{if .Hidden}}
+        <input type="hidden" name="hidden" value="0">
+        <button type="submit" class="secondary" title="Show this calendar in the list again">Unhide</button>
+      {{else}}
+        <input type="hidden" name="hidden" value="1">
+        <button type="submit" class="secondary" title="Collapse this calendar into the hidden section; does not change whether it syncs">Hide</button>
+      {{end}}
+    </form>
+    <a href="/calendars/{{$c.ID}}" class="muted">Settings →</a>
+  </span>
+</li>
+{{end}}

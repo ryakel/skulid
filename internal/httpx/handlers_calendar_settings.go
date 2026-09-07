@@ -304,6 +304,26 @@ func accountEmail(a *db.Account) string {
 	return a.Email
 }
 
+// handleCalendarToggleHidden collapses a calendar out of the Accounts list, or
+// brings it back. Display only: it deliberately does not touch the watch
+// channel or enqueue a sync, because hiding a row is not a statement about
+// whether that calendar should be syncing.
+func (s *Server) handleCalendarToggleHidden(w http.ResponseWriter, r *http.Request) {
+	cal, ok := s.calendarFromURL(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if err := s.Calendars.SetHidden(r.Context(), cal.ID, r.FormValue("hidden") == "1"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/accounts", http.StatusFound)
+}
+
 // handleCalendarToggleEnabled flips the calendar's enabled flag. When turning
 // off, also tears down the watch channel so Google stops billing notifications
 // we'd just discard. When turning on, kicks the worker to re-register the

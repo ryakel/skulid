@@ -1,75 +1,90 @@
 {{define "body"}}
 <div class="row">
-<h1>Accounts</h1>
-<form method="post" action="/accounts/connect"><button type="submit">+ Connect Google account</button></form>
+  <h1>Accounts</h1>
+  <form method="post" action="/accounts/connect"><button type="submit">+ Connect Google account</button></form>
 </div>
-{{if .Accounts}}
-<table>
-  <thead><tr><th>Email</th><th>Calendars</th><th>Connected</th><th></th></tr></thead>
-  <tbody>
-  {{range .Accounts}}
-    <tr>
-      <td>
-        {{.Email}}
-        {{if .NeedsReauth}}<span class="cat-pill" style="background:#dc2626;margin-left:.4rem">needs reconnect</span>{{end}}
-        {{if .AIExcluded}}<span class="cat-pill" style="background:#0ea5e9;margin-left:.4rem">hidden from assistant</span>{{end}}
-      </td>
-      <td>{{(index $.CalendarsByAccount .ID) | len}}</td>
-      <td>{{fmtTime .CreatedAt}}</td>
-      <td class="actions">
-        {{if .NeedsReauth}}<form method="post" action="/accounts/{{.ID}}/reconnect"><button type="submit">Reconnect</button></form>{{end}}
-        <form method="post" action="/accounts/{{.ID}}/refresh"><button type="submit" class="secondary">Refresh calendars</button></form>
-        {{if $.Features.Assistant}}
-        <form method="post" action="/accounts/{{.ID}}/ai-excluded">
-          {{if .AIExcluded}}
-            <input type="hidden" name="excluded" value="0">
-            <button type="submit" class="secondary" title="Let the assistant read and propose changes to this account">Show to assistant</button>
-          {{else}}
-            <input type="hidden" name="excluded" value="1">
-            <button type="submit" class="secondary" title="Hide this account from the assistant; nothing about it is sent to Anthropic">Hide from assistant</button>
-          {{end}}
-        </form>
-        {{end}}
-        <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Disconnect {{.Email}}?')"><button type="submit" class="danger">Disconnect</button></form>
-      </td>
-    </tr>
-    {{if .NeedsReauth}}
-    <tr><td colspan="4" class="nested">
-      <div class="reauth-detail">
-        <strong>Why sync stopped:</strong> {{.ReauthReason}}
-        {{if .ReauthDetectedAt}}<span class="muted">Detected {{fmtTimePtr .ReauthDetectedAt}}.</span>{{end}}
-      </div>
-    </td></tr>
-    {{end}}
-    {{with index $.CalendarsByAccount .ID}}
-    <tr><td colspan="4" class="nested">
-      <ul class="calendars">
-      {{range .}}
-        <li class="cal-row {{if not .Enabled}}cal-row-disabled{{end}}">
-          <span class="dot" style="background:{{.Color}}"></span>
-          <strong>{{.Summary}}</strong>
-          <span class="muted">{{.TimeZone}} · {{.GoogleCalendarID}}</span>
-          {{if not .Enabled}}<span class="cat-pill" style="background:#9ca3af;margin-left:.5rem">disabled</span>{{end}}
-          <span class="cal-row-actions">
-            <form method="post" action="/calendars/{{.ID}}/enabled" style="display:inline">
-              {{if .Enabled}}
-                <input type="hidden" name="enabled" value="0">
-                <button type="submit" class="secondary">Disable</button>
+
+{{if .Rows}}
+{{range .Rows}}
+  {{$a := .Account}}
+  {{$shown := .Shown}}
+  {{$hidden := .Hidden}}
+  <section class="account-card">
+    <table class="account-table">
+      <thead>
+        <tr><th>Email</th><th>Calendars</th><th>Connected</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            {{$a.Email}}
+            {{if $a.NeedsReauth}}<span class="cat-pill" style="background:#dc2626;margin-left:.4rem">needs reconnect</span>{{end}}
+            {{if $a.AIExcluded}}<span class="cat-pill" style="background:#0ea5e9;margin-left:.4rem">hidden from assistant</span>{{end}}
+          </td>
+          <td>
+            {{.Total}}
+            {{if $hidden}}<span class="muted">· {{len $hidden}} hidden</span>{{end}}
+          </td>
+          <td>{{fmtTime $a.CreatedAt}}</td>
+          <td class="actions">
+            {{if $a.NeedsReauth}}<form method="post" action="/accounts/{{$a.ID}}/reconnect"><button type="submit">Reconnect</button></form>{{end}}
+            <form method="post" action="/accounts/{{$a.ID}}/refresh"><button type="submit" class="secondary">Refresh calendars</button></form>
+            {{if $.Features.Assistant}}
+            <form method="post" action="/accounts/{{$a.ID}}/ai-excluded">
+              {{if $a.AIExcluded}}
+                <input type="hidden" name="excluded" value="0">
+                <button type="submit" class="secondary" title="Let the assistant read and propose changes to this account">Show to assistant</button>
               {{else}}
-                <input type="hidden" name="enabled" value="1">
-                <button type="submit">Enable</button>
+                <input type="hidden" name="excluded" value="1">
+                <button type="submit" class="secondary" title="Hide this account from the assistant; nothing about it is sent to Anthropic">Hide from assistant</button>
               {{end}}
             </form>
-            <a href="/calendars/{{.ID}}" class="muted">Settings →</a>
-          </span>
-        </li>
-      {{end}}
-      </ul>
-    </td></tr>
-    {{end}}
-  {{end}}
-  </tbody>
-</table>
+            {{end}}
+            <form method="post" action="/accounts/{{$a.ID}}/delete" onsubmit="return confirm('Disconnect {{$a.Email}}?')"><button type="submit" class="danger">Disconnect</button></form>
+          </td>
+        </tr>
+
+        {{if $a.NeedsReauth}}
+        <tr><td colspan="4" class="nested">
+          <div class="reauth-detail">
+            <strong>Why sync stopped:</strong> {{$a.ReauthReason}}
+            {{if $a.ReauthDetectedAt}}<span class="muted">Detected {{fmtTimePtr $a.ReauthDetectedAt}}.</span>{{end}}
+          </div>
+        </td></tr>
+        {{end}}
+
+        <tr><td colspan="4" class="nested">
+          {{if $shown}}
+            <ul class="calendars">
+            {{range $shown}}
+              {{template "calendarrow" dict "Cal" . "Hidden" false}}
+            {{end}}
+            </ul>
+          {{else}}
+            <p class="muted" style="margin:.35rem 0">
+              {{if $hidden}}Every calendar on this account is hidden.{{else}}No calendars discovered yet.{{end}}
+            </p>
+          {{end}}
+
+          {{if $hidden}}
+          <details class="hidden-cals">
+            <summary>Hidden · {{len $hidden}}</summary>
+            <p class="field-help">
+              Hidden only means "keep it out of the list above" — it does not
+              turn a calendar off. Any of these that is enabled is still syncing.
+            </p>
+            <ul class="calendars">
+            {{range $hidden}}
+              {{template "calendarrow" dict "Cal" . "Hidden" true}}
+            {{end}}
+            </ul>
+          </details>
+          {{end}}
+        </td></tr>
+      </tbody>
+    </table>
+  </section>
+{{end}}
 {{else}}
 <p class="muted">No accounts connected yet.</p>
 {{end}}
