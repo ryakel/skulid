@@ -3,7 +3,7 @@ module github.com/ryakel/skulid
 go 1.26.7
 
 require (
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.28.0
 	golang.org/x/oauth2 v0.36.0
